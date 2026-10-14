@@ -6,6 +6,7 @@ use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,6 +48,8 @@ final class ApiExceptionRenderer
             $e instanceof ValidationException => ApiResponse::error('The given data was invalid.', 422, $e->errors()),
             $e instanceof AuthenticationException => ApiResponse::error('Unauthenticated.', 401),
             $e instanceof AuthorizationException => ApiResponse::error($e->getMessage() ?: 'This action is unauthorized.', 403),
+            // Two requests raced past validation; the database unique key is the final arbiter.
+            $e instanceof UniqueConstraintViolationException => ApiResponse::error('A record with the same unique value already exists.', 409),
             $e instanceof ModelNotFoundException,
             $e instanceof NotFoundHttpException => ApiResponse::error('Resource not found.', 404),
             $e instanceof ThrottleRequestsException => ApiResponse::error(

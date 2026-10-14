@@ -22,4 +22,15 @@ enum OrderStatus: string
     case RefundPending = 'refund_pending';
     case Refunded = 'refunded';
     case DeliveryFailed = 'delivery_failed';
+
+    /** Customer may cancel until the order has been packed. (Full admin transition map: Phase 7.) */
+    public function canCustomerCancel(): bool
+    {
+        return in_array($this, [self::Pending, self::Confirmed, self::Processing], true);
+    }
+
+    public function canCustomerReturn(): bool
+    {
+        return $this === self::Delivered;
+    }
 }

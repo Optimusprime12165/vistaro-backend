@@ -57,6 +57,25 @@ return [
         'max_per_product' => 10,
     ],
 
+    'catalog' => [
+        'sale_min_discount' => (int) env('SALE_MIN_DISCOUNT', 25),   // storefront "sale" badge = discount >= 25% (frontend rule)
+        'related_limit'     => 8,
+        'max_attributes'    => 20,
+    ],
+
+    'cart' => [
+        'max_line_quantity' => 10,
+    ],
+
+    'addresses' => [
+        'max_per_customer' => (int) env('MAX_ADDRESSES', 10),       // defensive cap, not a business rule from the spec
+    ],
+
+    'orders' => [
+        'return_window_days'    => (int) env('RETURN_WINDOW_DAYS', 14), // frontend policy text ("within 14 days of delivery")
+        'idempotency_ttl_hours' => 24,
+    ],
+
     'cache' => [
         'catalog_ttl' => (int) env('CATALOG_CACHE_TTL', 300),
     ],

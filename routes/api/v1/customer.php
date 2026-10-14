@@ -1,6 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Customer\AddressController;
 use App\Http\Controllers\Api\V1\Customer\AuthController;
+use App\Http\Controllers\Api\V1\Customer\CartController;
+use App\Http\Controllers\Api\V1\Customer\CheckoutController;
+use App\Http\Controllers\Api\V1\Customer\OrderController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,5 +22,29 @@ Route::middleware(['auth:customer', 'principal:customer'])->name('customer.')->g
     Route::get('me', [ProfileController::class, 'show'])->name('me');
     Route::patch('me', [ProfileController::class, 'update'])->name('me.update');
 
-    // Phase 6: addresses, cart, checkout, orders
+    // Addresses (a customer only ever sees/changes their own)
+    Route::get('addresses', [AddressController::class, 'index'])->name('addresses.index');
+    Route::post('addresses', [AddressController::class, 'store'])->name('addresses.store');
+    Route::get('addresses/{id}', [AddressController::class, 'show'])->whereNumber('id')->name('addresses.show');
+    Route::patch('addresses/{id}', [AddressController::class, 'update'])->whereNumber('id')->name('addresses.update');
+    Route::delete('addresses/{id}', [AddressController::class, 'destroy'])->whereNumber('id')->name('addresses.destroy');
+    Route::patch('addresses/{id}/default', [AddressController::class, 'makeDefault'])->whereNumber('id')->name('addresses.default');
+
+    // Cart (server-priced)
+    Route::get('cart', [CartController::class, 'show'])->name('cart.show');
+    Route::delete('cart', [CartController::class, 'destroy'])->name('cart.clear');
+    Route::post('cart/items', [CartController::class, 'addItem'])->name('cart.items.store');
+    Route::patch('cart/items/{id}', [CartController::class, 'updateItem'])->whereNumber('id')->name('cart.items.update');
+    Route::delete('cart/items/{id}', [CartController::class, 'removeItem'])->whereNumber('id')->name('cart.items.destroy');
+
+    Route::get('checkout/preview', [CheckoutController::class, 'preview'])->name('checkout.preview');
+
+    // Orders (Idempotency-Key header required on POST /orders)
+    Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::post('orders', [OrderController::class, 'store'])->name('orders.store');
+    Route::get('orders/{id}', [OrderController::class, 'show'])->whereNumber('id')->name('orders.show');
+    Route::post('orders/{id}/cancel', [OrderController::class, 'cancel'])->whereNumber('id')->name('orders.cancel');
+    Route::post('orders/{id}/return', [OrderController::class, 'return'])->whereNumber('id')->name('orders.return');
+
+    // Phase 7: admin-side fulfilment (packing, pickup, AWB, tracking) lives under /admin
 });

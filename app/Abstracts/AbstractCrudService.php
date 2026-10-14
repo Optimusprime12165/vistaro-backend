@@ -88,7 +88,10 @@ abstract class AbstractCrudService implements CrudInterface
 
     public function index(ListQuery $query): Paginator|CursorPaginator
     {
-        $builder = $this->newQuery()->select($this->columns());
+        $builder = $this->newQuery();
+        if ($this->columns() !== ['*']) {
+            $builder->select($this->columns());     // explicit column list; default keeps withSum()/withCount() sub-selects intact
+        }
 
         $this->applySearch($builder, $query->search);
         $this->applyFilters($builder, $query->filters);

@@ -1,6 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AuthController;
+use App\Http\Controllers\Api\V1\Admin\CategoryController;
+use App\Http\Controllers\Api\V1\Admin\InventoryController;
+use App\Http\Controllers\Api\V1\Admin\ProductController;
+use App\Http\Controllers\Api\V1\Admin\ProductImageController;
+use App\Http\Controllers\Api\V1\Admin\ProductVariantController;
+use App\Http\Controllers\Api\V1\Admin\SubCategoryController;
 use Illuminate\Support\Facades\Route;
 
 // Public: admin sign-in (email + password). Mounted under /api/v1/admin
@@ -13,7 +19,45 @@ Route::middleware(['auth:admin', 'principal:admin'])->group(function () {
     Route::post('auth/logout-all', [AuthController::class, 'logoutAll'])->name('logout-all');
     Route::patch('auth/password', [AuthController::class, 'changePassword'])->name('password');
 
-    // Phase 5: categories, sub-categories, products, images, sizes, offline stock
+    // ---- Read access: any active admin (super_admin, admin, staff)
+    Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+    Route::get('categories/{category}', [CategoryController::class, 'show'])->name('categories.show');
+    Route::get('sub-categories', [SubCategoryController::class, 'index'])->name('sub-categories.index');
+    Route::get('sub-categories/{sub_category}', [SubCategoryController::class, 'show'])->name('sub-categories.show');
+    Route::get('products', [ProductController::class, 'index'])->name('products.index');
+    Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
+    Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::get('inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
+
+    // ---- Stock changes: admin + staff (super_admin always passes)
+    Route::middleware('admin.role:admin,staff')->group(function () {
+        Route::put('products/{product}/stock', [InventoryController::class, 'set'])->name('products.stock.set');
+        Route::post('products/{product}/stock/adjust', [InventoryController::class, 'adjust'])->name('products.stock.adjust');
+    });
+
+    // ---- Catalogue management: admin only (super_admin always passes); staff get 403
+    Route::middleware('admin.role:admin')->group(function () {
+        Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
+        Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+        Route::post('sub-categories', [SubCategoryController::class, 'store'])->name('sub-categories.store');
+        Route::patch('sub-categories/{sub_category}', [SubCategoryController::class, 'update'])->name('sub-categories.update');
+        Route::delete('sub-categories/{sub_category}', [SubCategoryController::class, 'destroy'])->name('sub-categories.destroy');
+
+        Route::post('products', [ProductController::class, 'store'])->name('products.store');
+        Route::patch('products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+
+        Route::post('products/{product}/images', [ProductImageController::class, 'store'])->name('products.images.store');
+        Route::patch('products/{product}/images/order', [ProductImageController::class, 'reorder'])->name('products.images.reorder');   // before {image}
+        Route::delete('products/{product}/images/{image}', [ProductImageController::class, 'destroy'])->name('products.images.destroy');
+        Route::patch('products/{product}/images/{image}/primary', [ProductImageController::class, 'primary'])->name('products.images.primary');
+
+        Route::put('products/{product}/colors', [ProductVariantController::class, 'colors'])->name('products.colors');
+        Route::put('products/{product}/sizes', [ProductVariantController::class, 'sizes'])->name('products.sizes');
+        Route::delete('products/{product}/sizes/{size}', [ProductVariantController::class, 'removeSize'])->name('products.sizes.destroy');
+    });
+
     // Phase 7: orders, fulfilment, customers, login-events, dashboard
-    // Role-restricted groups use ->middleware('admin.role:admin,staff') (super_admin always passes)
 });
