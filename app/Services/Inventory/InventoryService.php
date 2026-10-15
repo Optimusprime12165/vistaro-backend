@@ -72,6 +72,20 @@ final class InventoryService
         DB::transaction(fn () => $this->applyOnline($productSizeId, +$quantity, -$quantity, InventoryMovementType::OrderReleased, $actor, $note, $refType, $refId), self::RETRIES);
     }
 
+    /** Order shipped: the reservation becomes a sale (reserved -= n, sellable quantity unchanged). */
+    public function consumeReserved(int $productSizeId, int $quantity, string $refType, int $refId, ?Model $actor = null): void
+    {
+        $this->assertPositive($quantity);
+        DB::transaction(fn () => $this->applyOnline($productSizeId, 0, -$quantity, InventoryMovementType::OrderFulfilled, $actor, null, $refType, $refId), self::RETRIES);
+    }
+
+    /** A returned item is put back on sale (admin chose to restock it). */
+    public function returnToStock(int $productSizeId, int $quantity, string $refType, int $refId, ?Model $actor = null, ?string $note = null): void
+    {
+        $this->assertPositive($quantity);
+        DB::transaction(fn () => $this->applyOnline($productSizeId, +$quantity, 0, InventoryMovementType::OrderReturned, $actor, $note, $refType, $refId), self::RETRIES);
+    }
+
     /**
      * quantity += $qtyDelta and reserved += $reservedDelta, atomically, never leaving either below zero.
      * The WHERE clause carries the guard, so it is evaluated against the row as it is NOW, under the row lock the UPDATE takes.

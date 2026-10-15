@@ -37,7 +37,7 @@ use Illuminate\Support\Str;
  */
 final class OrderService
 {
-    private const RELATIONS_DETAIL = ['items', 'address', 'statusHistories', 'payments'];
+    private const RELATIONS_DETAIL = ['items', 'address', 'statusHistories', 'payments', 'shipment.events'];
 
     public function __construct(
         private readonly PricingService $pricing,

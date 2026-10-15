@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\V1\Admin\AuthController;
 use App\Http\Controllers\Api\V1\Admin\CategoryController;
+use App\Http\Controllers\Api\V1\Admin\CustomerController;
 use App\Http\Controllers\Api\V1\Admin\InventoryController;
+use App\Http\Controllers\Api\V1\Admin\OrderController;
 use App\Http\Controllers\Api\V1\Admin\ProductController;
 use App\Http\Controllers\Api\V1\Admin\ProductImageController;
 use App\Http\Controllers\Api\V1\Admin\ProductVariantController;
@@ -29,14 +31,31 @@ Route::middleware(['auth:admin', 'principal:admin'])->group(function () {
     Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::get('inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
 
+    // ---- Orders: any admin may read; fulfilment actions are open to staff too (cancel / returns / refunds are admin-only, enforced per target status)
+    Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('orders/{id}', [OrderController::class, 'show'])->whereNumber('id')->name('orders.show');
+    Route::get('orders/{id}/tracking', [OrderController::class, 'tracking'])->whereNumber('id')->name('orders.tracking');
+    Route::get('orders/{id}/label', [OrderController::class, 'label'])->whereNumber('id')->name('orders.label');
+
+    Route::middleware('admin.role:admin,staff')->group(function () {
+        Route::post('orders/{id}/transition', [OrderController::class, 'transition'])->whereNumber('id')->name('orders.transition');
+        Route::post('orders/{id}/pickup', [OrderController::class, 'pickup'])->whereNumber('id')->name('orders.pickup');
+        Route::post('orders/{id}/tracking/sync', [OrderController::class, 'sync'])->whereNumber('id')->name('orders.tracking.sync');
+    });
+
     // ---- Stock changes: admin + staff (super_admin always passes)
     Route::middleware('admin.role:admin,staff')->group(function () {
         Route::put('products/{product}/stock', [InventoryController::class, 'set'])->name('products.stock.set');
         Route::post('products/{product}/stock/adjust', [InventoryController::class, 'adjust'])->name('products.stock.adjust');
     });
 
-    // ---- Catalogue management: admin only (super_admin always passes); staff get 403
+    // ---- Catalogue management, refunds, customers: admin only (super_admin always passes); staff get 403
     Route::middleware('admin.role:admin')->group(function () {
+        Route::post('orders/{id}/refund', [OrderController::class, 'refund'])->whereNumber('id')->name('orders.refund');
+        Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::get('customers/{id}', [CustomerController::class, 'show'])->whereNumber('id')->name('customers.show');
+        Route::get('login-events', [CustomerController::class, 'loginEvents'])->name('login-events.index');
+
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
         Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
@@ -59,5 +78,5 @@ Route::middleware(['auth:admin', 'principal:admin'])->group(function () {
         Route::delete('products/{product}/sizes/{size}', [ProductVariantController::class, 'removeSize'])->name('products.sizes.destroy');
     });
 
-    // Phase 7: orders, fulfilment, customers, login-events, dashboard
+    // Dashboard metrics: Phase 9
 });

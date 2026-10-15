@@ -56,8 +56,21 @@ class OrderResource extends JsonResource
                 'name' => $this->address->name, 'phone' => $this->address->phone, 'line1' => $this->address->line1,
                 'landmark' => $this->address->landmark, 'city' => $this->address->city, 'state' => $this->address->state, 'pincode' => $this->address->pincode,
             ] : null),
+            'shipment' => $this->whenLoaded('shipment', fn () => $this->shipment ? [
+                'awb' => $this->shipment->awb,
+                'carrier' => $this->shipment->carrier,
+                'status' => $this->shipment->status->value,
+                'is_mock' => $this->shipment->is_mock,
+                'shipped_at' => $this->shipment->shipped_at?->toIso8601String(),
+                'delivered_at' => $this->shipment->delivered_at?->toIso8601String(),
+                'tracking' => $this->shipment->events->sortByDesc('occurred_at')->take(50)->map(fn ($e) => [
+                    'status' => $e->status, 'location' => $e->location, 'description' => $e->description, 'at' => $e->occurred_at->toIso8601String(),
+                ])->values(),
+            ] : null),
             'history' => $this->whenLoaded('statusHistories', fn () => $this->statusHistories->map(fn ($h) => [
-                'status' => $h->to_status->value, 'from' => $h->from_status?->value, 'reason' => $h->reason, 'at' => $h->created_at->toIso8601String(),
+                'status' => $h->to_status->value, 'from' => $h->from_status?->value,
+                'reason' => $h->actor_type === 'admin' ? null : $h->reason,      // internal admin notes are never shown to the customer
+                'at' => $h->created_at->toIso8601String(),
             ])->values()),
         ];
     }
