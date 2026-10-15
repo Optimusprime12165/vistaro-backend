@@ -96,13 +96,19 @@ final class MockDeliveryProvider implements DeliveryProviderInterface
             if (! isset($e['id'], $e['awb'], $e['status'], $e['at'])) {
                 continue;
             }
+            try {
+                $at = new DateTimeImmutable((string) $e['at']);
+            } catch (\Exception) {
+                throw new ApiException('Malformed webhook payload.', 422, ['events' => ['An event has an invalid timestamp.']]);
+            }
+
             $events[] = new TrackingEvent(
                 (string) $e['id'],
                 (string) $e['awb'],
                 (string) $e['status'],
-                new DateTimeImmutable((string) $e['at']),
-                $e['location'] ?? null,
-                $e['description'] ?? null,
+                $at,
+                isset($e['location']) ? (string) $e['location'] : null,
+                isset($e['description']) ? (string) $e['description'] : null,
             );
         }
 

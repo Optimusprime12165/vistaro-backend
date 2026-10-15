@@ -1,4 +1,4 @@
-# VISTARO — Phase 7: Admin order fulfilment (PARTIAL: code written, test suite incomplete)
+# VISTARO — Phase 7: Admin order fulfilment (code complete; completion tests WRITTEN but NOT YET RUN)
 
 ## Implemented
 - **State machine** (`OrderStatus::next()`): 14 statuses, 20 allowed moves, `cancelled` and `refunded` final. Anything else -> HTTP 422.
@@ -15,8 +15,19 @@
 Full suite **238 tests, 0 failures** on SQLite and MariaDB 10.11 (229 from Phases 1-6 + 7 state-machine tests covering all 196 status pairs + 2 smoke tests: COD order pending -> delivered with stock consumed and COD paid, label, customer tracking; webhook progression, duplicate and bad signature). `route:list` shows the 12 new routes.
 A smoke test found and I fixed one real bug (wrong shipment status constant).
 
-## NOT done yet
-1. Tests for: admin list/detail (search, filters, cursor paging, query count), role matrix, cancel at every stage and courier-cancel failure rollback, returns/refunds, pickup/label/tracking edge cases, webhook edge cases (out of order, unknown AWB, wrong provider, malformed body), customers and login-event lists.
-2. Parallel-process race checks (two admins on one order, duplicate webhook delivery, admin vs customer cancel).
-3. Not exercised yet: cursor-pagination meta on a real endpoint, mobile-number search normalisation, date filters, label headers.
-4. Not planned: real courier/payment provider, notifications, return-shipment pickups, dashboard (Phase 9).
+## Phase 7 completion pass (this session)
+- **Reviewed** every Phase 7 service/controller/request/resource against the state machine. `php -l` is clean on all 235 PHP files (PHP 8.3.6).
+- **Bug fixed**: `MockDeliveryProvider::parseWebhook` threw an uncaught exception (HTTP 500, courier would retry forever) on an unparseable event timestamp. It now returns HTTP 422. Location/description are cast to string.
+- **Tests written** (`tests/Feature/Fulfilment/`), covering the old "NOT done" list:
+  - `AdminOrderApiTest`: auth (guest 401, customer 403), role matrix (staff vs admin vs super_admin, including that a refused cancel changes nothing), transition validation, history rows with actor, list filters/validation/search, cursor pagination (no overlap/gaps), cancel at pending/confirmed/processing/packed, cancel after booking (courier cancel called), **courier refusing cancel rolls back**, cancel refused once shipped, customer-vs-admin cancel race (sequential), return with and without restock, refund only from refund_pending, pickup preconditions/duplicate/past date/COD amount, label (409 / headers), tracking + idempotent sync, customers + login-events.
+  - `DeliveryWebhookEdgeTest`: wrong provider 404, missing/tampered/empty-secret signature 401, malformed body/timestamp 422, skipped events, unknown AWB, out-of-order/stale events, skipped steps, cancelled order, failed -> retry -> delivered, no bearer token needed.
+- **IMPORTANT: these new tests have NOT been executed.** There is no Laravel runtime in the authoring environment (Packagist is unreachable), and `tests/Support/CatalogTestHelpers.php`, `tests/TestCase.php` and the Phase 1-6 tests were not in the supplied files. The tests assume the helper API visible in `FulfilmentTestHelpers` / `FulfilmentSmokeTest` (`actingAsAdmin`, `actingAsCustomer`, `guest`, `stock`, `newOrder`). Run `php artisan test --filter=Fulfilment` and fix any assertion that disagrees with real behaviour. The earlier "238 tests, 0 failures" claim in this file was the previous author's run and was not re-verified here.
+
+## Known limitations / findings (not changed)
+1. **Cancelled + paid dead end (latent).** `Cancelled` is final, and `onCancelled` sets payment to `refund_pending` for a paid order, but the refund endpoint only works from order status `refund_pending`. Today this cannot happen: the mock gateway never returns PAID and COD becomes paid only at delivery (cancel is impossible then). It WILL matter when a real gateway is added; a refund-record path for cancelled orders is needed then.
+2. **Real courier HTTP inside a row lock.** `ShipmentService::requestPickup` and `FulfilmentService::onCancelled` call the courier while the order row is locked. Fine for the mock; a real provider needs the call moved outside the transaction or a short timeout.
+3. **Concurrency tests are sequential.** True parallel-process races (two admins, duplicate webhook delivery) are protected by `lockForUpdate` and the unique `(shipment_id, external_id)` key, but are not exercised by a multi-process test.
+4. Not planned: real courier/payment provider, notifications, return-shipment pickups, dashboard (Phase 9). Frontend integration is Phase 8: the supplied Next.js app calls no Laravel endpoint (see below).
+
+## Frontend status (supplied `app.zip`)
+All data is mock/localStorage (`lib/mock-api.ts`, `lib/orders.ts`, `lib/admin.ts`, `lib/auth/auth-context.tsx`, `lib/store.tsx`, `lib/offline.ts`, `lib/loginlog.ts`); the admin gate in `components/admin/AdminShell.tsx` is a localStorage flag, not authentication. Nothing calls `/api/v1`. `package.json`/`next.config` were not in the ZIP.
