@@ -23,11 +23,6 @@ class AuthController extends ApiController
         return $this->sendOtp($request, false);
     }
 
-    public function reverifyOtp(RequestOtpRequest $request): JsonResponse
-    {
-        return $this->reverifyOtp($request, false);
-    }
-
     public function resendOtp(RequestOtpRequest $request): JsonResponse
     {
         return $this->sendOtp($request, true);

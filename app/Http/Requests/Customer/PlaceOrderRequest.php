@@ -4,6 +4,7 @@ namespace App\Http\Requests\Customer;
 
 use App\Enums\PaymentMethod;
 use App\Models\Address;
+use App\Services\Commerce\AddressService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +25,7 @@ class PlaceOrderRequest extends FormRequest
     {
         return [
             'idempotency_key' => ['required', 'string', 'regex:/^[A-Za-z0-9._:-]{8,100}$/'],
-            'address_id' => ['required', 'integer', Rule::exists('addresses', 'id')->where('user_id', $this->user()->id)],
+            'address_id' => ['nullable', 'integer', Rule::exists('addresses', 'id')->where('user_id', $this->user()->id)],
             'payment_method' => ['required', Rule::enum(PaymentMethod::class)],
         ];
     }
@@ -37,9 +38,12 @@ class PlaceOrderRequest extends FormRequest
         ];
     }
 
+    /** The selected address, or the customer's default when `address_id` is omitted. */
     public function address(): Address
     {
-        return $this->user()->addresses()->findOrFail((int) $this->validated('address_id'));
+        $id = $this->validated('address_id');
+
+        return app(AddressService::class)->resolveForCheckout($this->user(), $id === null ? null : (int) $id);
     }
 
     public function method(): PaymentMethod

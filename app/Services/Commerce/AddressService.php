@@ -27,6 +27,20 @@ final class AddressService
         return $user->addresses()->findOrFail($id);
     }
 
+    /**
+     * The address a checkout/preview uses: the one the customer SELECTED (must be theirs), otherwise their DEFAULT address.
+     * Someone else's id is "not found", never leaked; a customer with no saved address gets a clear 422.
+     */
+    public function resolveForCheckout(User $user, ?int $selectedId): Address
+    {
+        if ($selectedId !== null) {
+            return $this->find($user, $selectedId);
+        }
+
+        return $user->addresses()->where('is_default', true)->first()
+            ?? throw new ApiException('Add a delivery address first.', 422, ['address_id' => ['No delivery address selected and no default address saved.']]);
+    }
+
     /** @param array<string,mixed> $data validated + normalised */
     public function create(User $user, array $data): Address
     {
