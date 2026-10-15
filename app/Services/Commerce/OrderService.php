@@ -22,6 +22,7 @@ use App\Models\Payment;
 use App\Models\ProductSize;
 use App\Models\User;
 use App\Services\Inventory\InventoryService;
+use App\Services\Settings\BusinessSettingsService;
 use App\Support\ImageUrl;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -45,6 +46,7 @@ final class OrderService
         private readonly InventoryService $inventory,
         private readonly PaymentGatewayInterface $gateway,
         private readonly IdempotencyService $idempotency,
+        private readonly BusinessSettingsService $settings,
     ) {
     }
 
@@ -220,7 +222,7 @@ final class OrderService
             }
 
             $deliveredAt = $order->statusHistories()->where('to_status', OrderStatus::Delivered->value)->latest('id')->value('created_at');
-            $days = (int) config('vistaro.orders.return_window_days');
+            $days = $this->settings->returnWindowDays();           // business setting orders.return_window_days (config default 14)
             if ($deliveredAt && now()->greaterThan(\Illuminate\Support\Carbon::parse($deliveredAt)->addDays($days))) {
                 throw new ApiException("The {$days}-day return window for this order has closed.", 422, ['order' => ["Returns are accepted within {$days} days of delivery."]]);
             }

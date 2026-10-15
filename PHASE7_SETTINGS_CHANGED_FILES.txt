@@ -1,0 +1,26 @@
+NEW  app/Enums/SettingType.php
+NEW  app/Exceptions/InvalidSettingException.php
+NEW  app/Support/SecretDetector.php
+NEW  app/Services/Settings/BusinessSettingsService.php
+NEW  app/Services/Settings/SettingDefinition.php
+NEW  app/Services/Settings/SettingDefinitions.php
+NEW  app/Models/BusinessSetting.php
+NEW  app/Http/Requests/Admin/SettingStoreRequest.php
+NEW  app/Http/Requests/Admin/SettingUpdateRequest.php
+NEW  app/Http/Requests/Admin/SettingIndexRequest.php
+NEW  app/Http/Requests/PublicSettingIndexRequest.php
+NEW  app/Http/Resources/BusinessSettingResource.php
+NEW  app/Http/Controllers/Api/V1/Admin/SettingController.php
+NEW  app/Http/Controllers/Api/V1/PublicSettingController.php
+NEW  database/migrations/2026_10_16_100000_create_business_settings_table.php
+NEW  database/seeders/BusinessSettingsSeeder.php
+NEW  tests/Support/CatalogTestHelpers.php   (reconstructed - original was missing)
+NEW  tests/Unit/SettingTypeTest.php
+MOD  app/Services/Commerce/PricingService.php
+MOD  app/Services/Commerce/OrderService.php
+MOD  app/Providers/VistaroServiceProvider.php
+MOD  database/seeders/DatabaseSeeder.php
+MOD  config/vistaro.php
+MOD  routes/api/v1/admin.php
+MOD  routes/api/v1/public.php
+MOD  tests/Feature/Fulfilment/AdminOrderApiTest.php   (403 -> 401 expectation)

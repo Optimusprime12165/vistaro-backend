@@ -79,4 +79,10 @@ return [
     'cache' => [
         'catalog_ttl' => (int) env('CATALOG_CACHE_TTL', 300),
     ],
+
+    // business_settings (dynamic, DB-backed). The shipping / return values above stay as the DEFAULTS used when a setting row
+    // is absent or invalid; once a row exists it wins. Writes flush the cache, so TTL only bounds cross-process staleness.
+    'settings' => [
+        'cache_ttl' => (int) env('SETTINGS_CACHE_TTL', 300),
+    ],
 ];

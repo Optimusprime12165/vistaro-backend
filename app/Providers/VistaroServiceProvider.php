@@ -8,6 +8,7 @@ use App\Contracts\OtpDeliveryInterface;
 use App\Contracts\PaymentGatewayInterface;
 use App\Services\Otp\LogOtpDelivery;
 use App\Services\Payment\MockPaymentGateway;
+use App\Services\Settings\BusinessSettingsService;
 use App\Services\Shipping\MockDeliveryProvider;
 use App\Services\Storage\DiskImageStorage;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -24,6 +25,9 @@ class VistaroServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // one settings snapshot per request / job (scoped), so a long-lived worker never serves a stale per-request memo
+        $this->app->scoped(BusinessSettingsService::class);
+
         $this->app->bind(OtpDeliveryInterface::class, fn () => match (config('vistaro.otp.delivery')) {
             'log' => new LogOtpDelivery(),
             default => throw new InvalidArgumentException('Unsupported OTP_DELIVERY: ' . config('vistaro.otp.delivery')),

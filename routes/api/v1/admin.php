@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Admin\OrderController;
 use App\Http\Controllers\Api\V1\Admin\ProductController;
 use App\Http\Controllers\Api\V1\Admin\ProductImageController;
 use App\Http\Controllers\Api\V1\Admin\ProductVariantController;
+use App\Http\Controllers\Api\V1\Admin\SettingController;
 use App\Http\Controllers\Api\V1\Admin\SubCategoryController;
 use Illuminate\Support\Facades\Route;
 
@@ -55,6 +56,13 @@ Route::middleware(['auth:admin', 'principal:admin'])->group(function () {
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::get('customers/{id}', [CustomerController::class, 'show'])->whereNumber('id')->name('customers.show');
         Route::get('login-events', [CustomerController::class, 'loginEvents'])->name('login-events.index');
+
+        // Business settings (dynamic shipping / return rules, store info). Admin only, including reads. Keys look like shipping.flat_fee.
+        Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::post('settings', [SettingController::class, 'store'])->name('settings.store');
+        Route::get('settings/{key}', [SettingController::class, 'show'])->where('key', '[a-z0-9_.]+')->name('settings.show');
+        Route::patch('settings/{key}', [SettingController::class, 'update'])->where('key', '[a-z0-9_.]+')->name('settings.update');
+        Route::delete('settings/{key}', [SettingController::class, 'destroy'])->where('key', '[a-z0-9_.]+')->name('settings.destroy');
 
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');

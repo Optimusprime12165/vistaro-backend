@@ -26,8 +26,9 @@ class AdminOrderApiTest extends TestCase
 
         $this->guest()->getJson('/api/v1/admin/orders')->assertStatus(401);
         $this->guest()->postJson("/api/v1/admin/orders/{$order->id}/transition", ['status' => 'confirmed'])->assertStatus(401);
-        $this->actingAsCustomer($customer)->getJson('/api/v1/admin/orders')->assertStatus(403);
-        $this->actingAsCustomer($customer)->postJson("/api/v1/admin/orders/{$order->id}/transition", ['status' => 'confirmed'])->assertStatus(403);
+        // A customer token on an admin route is rejected by the `admin` guard's provider => 401 (docs/04-authentication.md: "wrong guard"), not 403.
+        $this->actingAsCustomer($customer)->getJson('/api/v1/admin/orders')->assertStatus(401);
+        $this->actingAsCustomer($customer)->postJson("/api/v1/admin/orders/{$order->id}/transition", ['status' => 'confirmed'])->assertStatus(401);
         $this->assertSame('pending', $this->statusOf($order->id));
     }
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Catalog\CategoryController;
 use App\Http\Controllers\Api\V1\Catalog\ProductController;
 use App\Http\Controllers\Api\V1\Catalog\SubCategoryController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\PublicSettingController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('health', [HealthController::class, 'health'])->name('health');
@@ -20,3 +21,7 @@ Route::name('catalog.')->group(function () {
     Route::get('products/{slug}', [ProductController::class, 'show'])->name('products.show');
     Route::get('products/{slug}/related', [ProductController::class, 'related'])->name('products.related');
 });
+
+// Public business settings: ONLY rows flagged is_public (store contact, shipping fee / free-shipping threshold, return window ...)
+Route::get('settings', [PublicSettingController::class, 'index'])->name('settings.index');
+Route::get('settings/{key}', [PublicSettingController::class, 'show'])->where('key', '[a-z0-9_.]+')->name('settings.show');

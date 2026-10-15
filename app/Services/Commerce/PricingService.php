@@ -5,6 +5,7 @@ namespace App\Services\Commerce;
 use App\Enums\ProductStatus;
 use App\Models\CartItem;
 use App\Support\ImageUrl;
+use App\Services\Settings\BusinessSettingsService;
 use App\Support\Money;
 use App\Support\StockDisplay;
 use Illuminate\Support\Collection;
@@ -15,11 +16,16 @@ use Illuminate\Support\Collection;
  *
  * Business rules used (from existing configuration, nothing invented):
  *  - price = products.price, MRP = products.mrp, discount = MRP - price
- *  - shipping = 0 when the subtotal is 0 or >= vistaro.shipping.free_above, else vistaro.shipping.flat_fee
+ *  - shipping = 0 when the subtotal is 0 or >= the free-shipping threshold, else the flat fee. Both come from business settings
+ *    (shipping.free_above / shipping.flat_fee), falling back to vistaro.shipping.* config (Rs 1999 / Rs 99) when no valid row exists
  *  - no tax line (prices are treated as tax-inclusive), no coupons
  */
 final class PricingService
 {
+    public function __construct(private readonly ?BusinessSettingsService $settings = null)   // optional: `new PricingService()` still works
+    {
+    }
+
     public const NEEDS_ATTENTION = ['product_unavailable', 'out_of_stock', 'insufficient_stock'];
 
     /**
@@ -68,8 +74,9 @@ final class PricingService
             ];
         }
 
-        $freeAbove = Money::toMinor((int) config('vistaro.shipping.free_above'));
-        $shipping = ($subtotal === 0 || $subtotal >= $freeAbove) ? 0 : Money::toMinor((int) config('vistaro.shipping.flat_fee'));
+        $settings = $this->settings ?? app(BusinessSettingsService::class);
+        $freeAbove = Money::toMinor($settings->freeShippingThreshold());
+        $shipping = ($subtotal === 0 || $subtotal >= $freeAbove) ? 0 : Money::toMinor($settings->shippingFlatFee());
 
         return [
             'items' => $lines,
