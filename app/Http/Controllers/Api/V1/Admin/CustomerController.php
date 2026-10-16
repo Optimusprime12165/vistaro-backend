@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Api\V1\ApiController;
 use App\Http\Requests\Admin\CustomerIndexRequest;
 use App\Http\Requests\Admin\LoginEventIndexRequest;
+use App\Http\Resources\AddressResource;
 use App\Http\Resources\CustomerAdminResource;
 use App\Http\Resources\LoginEventResource;
 use App\Http\Responses\ApiResponse;
@@ -27,6 +28,16 @@ class CustomerController extends ApiController
     public function show(Request $request, int $id): JsonResponse
     {
         return $this->ok(CustomerAdminResource::make($this->customers->show($id))->resolve($request));
+    }
+
+    /** Read-only: a customer's saved address book (admin only). Orders keep their own address snapshot. */
+    public function addresses(Request $request, int $id): JsonResponse
+    {
+        $customer = $this->customers->show($id);   // 404 when the customer does not exist
+
+        return $this->ok(AddressResource::collection(
+            $customer->addresses()->orderByDesc('is_default')->orderBy('id')->get()
+        )->resolve($request));
     }
 
     public function loginEvents(LoginEventIndexRequest $request): JsonResponse

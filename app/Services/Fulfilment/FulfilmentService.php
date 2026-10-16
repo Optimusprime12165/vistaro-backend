@@ -54,7 +54,7 @@ final class FulfilmentService
             if ($to === OrderStatus::PickupRequested && empty($opts['internal'])) {
                 throw new ApiException('Use the pickup endpoint to book the shipment.', 422, ['status' => ['pickup_requested is set by POST /admin/orders/{id}/pickup.']]);
             }
-            if ($actor !== null && $to->requiresAdminRole() && ! $actor->hasRole(AdminRole::Admin)) {
+            if ($actor !== null && $to->requiresAdminRole() && ! $actor->hasRole(AdminRole::SuperAdmin)) {
                 throw new ApiException('You do not have permission to perform this action.', 403);
             }
 
@@ -79,6 +79,38 @@ final class FulfilmentService
             ]);
 
             return $order->refresh();
+        }, 3);
+    }
+
+    /**
+     * Manual refund record (Super Admin only, enforced again here).
+     *  - refund_pending order  -> normal transition to refunded (return flow),
+     *  - cancelled order whose money was already collected (payment refund_pending) -> the order stays cancelled (final),
+     *    only the payment moves to refunded, and a history row records who refunded it and when.
+     * Anything else is refused with the usual state-machine 422.
+     */
+    public function recordRefund(int $id, Admin $actor, ?string $reason = null): Order
+    {
+        return DB::transaction(function () use ($id, $actor, $reason) {
+            $order = Order::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+
+            if ($order->status === OrderStatus::Cancelled && $order->payment_status === PaymentStatus::RefundPending) {
+                if (! $actor->hasRole(AdminRole::SuperAdmin)) {
+                    throw new ApiException('You do not have permission to perform this action.', 403);
+                }
+
+                $order->forceFill(['payment_status' => PaymentStatus::Refunded])->save();
+                $order->payments()->where('status', PaymentStatus::RefundPending->value)->update(['status' => PaymentStatus::Refunded->value]);
+                OrderStatusHistory::query()->create([
+                    'order_id' => $order->id, 'from_status' => OrderStatus::Cancelled, 'to_status' => OrderStatus::Cancelled,
+                    'actor_type' => 'admin', 'actor_id' => $actor->id,
+                    'reason' => 'Refund recorded' . ($reason !== null && $reason !== '' ? ': ' . mb_substr($reason, 0, 230) : ''),
+                ]);
+
+                return $order->refresh();
+            }
+
+            return $this->transition($order, OrderStatus::Refunded, $actor, $reason);
         }, 3);
     }
 

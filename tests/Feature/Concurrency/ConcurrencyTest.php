@@ -116,7 +116,7 @@ class ConcurrencyTest extends TestCase
 
     private function adminHeaders(): array
     {
-        return $this->bearerFor(\App\Models\Admin::factory()->create(['role' => 'admin']), 'admin');
+        return $this->bearerFor(\App\Models\Admin::factory()->create(['role' => 'staff']), 'admin');
     }
 
     // ---------------------------------------------------------------- scenarios

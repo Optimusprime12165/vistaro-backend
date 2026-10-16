@@ -45,9 +45,27 @@ class Product extends Model
         });
     }
 
+    /** Public ONLINE catalogue: active AND sold online (`is_available`). Offline-only products never match. */
     public function scopeStorefront(Builder $q): Builder
     {
         return $q->where('status', ProductStatus::Active->value)->where('is_available', true);
+    }
+
+    /** Admin stock tabs: 'online' = sold online, 'offline' = sold in the shop. A "both" product matches both tabs. */
+    public function scopeForChannel(Builder $q, string $channel): Builder
+    {
+        return $q->where($channel === 'offline' ? 'is_offline_available' : 'is_available', true);
+    }
+
+    /** online | offline | both | none (derived from the two availability flags; the stock itself is NOT split by channel). */
+    public function channel(): string
+    {
+        return match (true) {
+            $this->is_available && $this->is_offline_available => 'both',
+            $this->is_available => 'online',
+            $this->is_offline_available => 'offline',
+            default => 'none',
+        };
     }
 
     public function category(): BelongsTo
@@ -77,11 +95,7 @@ class Product extends Model
 
     public function sizes(): HasMany
     {
-        return $this->hasMany(ProductSize::class)->orderBy('id');   // insertion order == display order XS..4XL
+        return $this->hasMany(ProductSize::class)->orderBy('id');   // display order is applied by SizeCode::sortKey()
     }
 
-    public function offlineStocks(): HasMany
-    {
-        return $this->hasMany(OfflineStock::class)->orderBy('id');
-    }
 }

@@ -2,13 +2,13 @@
 
 namespace App\Services\Commerce;
 
-use App\Enums\Size;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductSize;
 use App\Models\User;
+use App\Support\SizeCode;
 use App\Services\Catalog\StorefrontCatalogService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -47,7 +47,7 @@ final class CartService
         return $cart ? $cart->items()->with(self::RELATIONS)->orderBy('id')->get() : new Collection();
     }
 
-    public function add(User $user, int $productId, Size $size, ?int $colorId, int $quantity): array
+    public function add(User $user, int $productId, string $size, ?int $colorId, int $quantity): array
     {
         DB::transaction(function () use ($user, $productId, $size, $colorId, $quantity) {
             $cart = $this->lockedCart($user);
@@ -72,7 +72,7 @@ final class CartService
             $item = $cart->items()->with('productSize')->findOrFail($itemId);          // 404 for lines of other customers
 
             $productId = $item->productSize->product_id;
-            $size = isset($changes['size']) ? Size::from($changes['size']) : $item->productSize->size;
+            $size = isset($changes['size']) ? SizeCode::normalize($changes['size']) : $item->productSize->size;
             $colorId = array_key_exists('color_id', $changes) ? $changes['color_id'] : $item->product_color_id;
             $quantity = (int) ($changes['quantity'] ?? $item->quantity);
 
@@ -132,7 +132,7 @@ final class CartService
      *
      * @return array{0:ProductSize,1:Product}
      */
-    private function resolveTarget(int $productId, Size $size, ?int $colorId): array
+    private function resolveTarget(int $productId, string $size, ?int $colorId): array
     {
         $product = $this->catalog->visible()->with(['sizes', 'colors:id,product_id'])->find($productId);
 
@@ -140,9 +140,13 @@ final class CartService
             throw ValidationException::withMessages(['product_id' => ['This product is not available.']]);
         }
 
+        $size = SizeCode::normalize($size);
         $ps = $product->sizes->firstWhere('size', $size);
         if (! $ps) {
-            throw ValidationException::withMessages(['size' => ["This product is not sold in size {$size->value}."]]);
+            throw ValidationException::withMessages(['size' => ["This product is not sold in size {$size}."]]);
+        }
+        if (! $ps->is_enabled) {                                   // a disabled size can never be put in a cart
+            throw ValidationException::withMessages(['size' => ["Size {$size} is not available."]]);
         }
 
         if ($product->colors->isNotEmpty() && $colorId === null) {
@@ -172,7 +176,7 @@ final class CartService
         if ($total > $available) {
             $left = max(0, $available);
             throw new InsufficientStockException(
-                $left > 0 ? "Only {$left} left in size {$ps->size->value}." : "Size {$ps->size->value} is out of stock.",
+                $left > 0 ? "Only {$left} left in size {$ps->size}." : "Size {$ps->size} is out of stock.",
                 ['quantity' => [$left > 0 ? "Only {$left} left." : 'Out of stock.']],
             );
         }

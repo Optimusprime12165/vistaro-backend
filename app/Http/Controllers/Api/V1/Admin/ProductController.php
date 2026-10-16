@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
 
 class ProductController extends ApiController
 {
-    private const FULL = ['category:id,name,slug', 'subCategory:id,name,slug', 'images', 'colors', 'sizes', 'offlineStocks'];
+    private const FULL = ['category:id,name,slug', 'subCategory:id,name,slug', 'images', 'colors', 'sizes'];
 
     public function __construct(private readonly ProductAdminService $products)
     {

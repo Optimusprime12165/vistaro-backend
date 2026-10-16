@@ -58,11 +58,11 @@ class OrderController extends ApiController
         return $this->created(AdminOrderResource::make($this->orders->detail($id))->resolve($request), 'Pickup requested.');
     }
 
-    /** Manual refund record: moves a refund_pending order to refunded. */
+    /** Manual refund record: refund_pending order -> refunded; a cancelled order that was already paid -> payment refunded. */
     public function refund(RefundRequest $request, int $id): JsonResponse
     {
         $note = trim(($request->validated('reference') ? 'Ref ' . $request->validated('reference') : 'Refund recorded') . ($request->validated('note') ? ' - ' . $request->validated('note') : ''));
-        $this->fulfilment->transition($id, OrderStatus::Refunded, $request->user(), $note);
+        $this->fulfilment->recordRefund($id, $request->user(), $note);
 
         return $this->ok(AdminOrderResource::make($this->orders->detail($id))->resolve($request), 'Refund recorded.');
     }

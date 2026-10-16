@@ -3,18 +3,30 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\ProductStatus;
-use App\Enums\Size;
+use App\Support\SizeCode;
 use App\Models\Product;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-/** Create (POST) and update (PATCH) a product. Colours/sizes/stock are set on create only; afterwards they have their own endpoints. */
+/**
+ * Create (POST) and update (PATCH) a product. Colours/sizes/stock are set on create only; afterwards they have their own endpoints.
+ * `channel` (online | offline | both) controls WHERE the product is visible; it never splits stock: each size has ONE shared quantity.
+ */
 class ProductRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $sizes = $this->input('sizes');
+        if (is_array($sizes)) {
+            $this->merge(['sizes' => array_map(fn ($row) => is_array($row) && isset($row['size']) && is_string($row['size'])
+                ? ['size' => SizeCode::normalize($row['size'])] + $row : $row, $sizes)]);
+        }
     }
 
     public function rules(): array
@@ -43,6 +55,7 @@ class ProductRequest extends FormRequest
                 }
             }],
             'status' => ['sometimes', Rule::enum(ProductStatus::class)],
+            'channel' => ['sometimes', 'in:online,offline,both'],
             'is_available' => ['sometimes', 'boolean'],
             'is_offline_available' => ['sometimes', 'boolean'],
             'is_bestseller' => ['sometimes', 'boolean'],
@@ -51,10 +64,11 @@ class ProductRequest extends FormRequest
             'colors' => $create ? ['sometimes', 'array', 'max:12'] : ['prohibited'],
             'colors.*.name' => ['required', 'string', 'min:1', 'max:40', 'distinct:ignore_case'],
             'colors.*.hex' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'sizes' => $create ? ['sometimes', 'array', 'max:8'] : ['prohibited'],
-            'sizes.*.size' => ['required', Rule::in(Size::values()), 'distinct'],
-            'sizes.*.quantity' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
-            'sizes.*.offline_quantity' => ['sometimes', 'integer', 'min:0', 'max:1000000'],
+            'sizes' => $create ? ['sometimes', 'array', 'max:12'] : ['prohibited'],
+            'sizes.*.size' => ['required', ...SizeCode::rules(), 'distinct'],
+            'sizes.*.quantity' => ['sometimes', 'integer', 'min:0', 'max:1000000'],      // initial SHARED quantity of this size
+            'sizes.*.is_enabled' => ['sometimes', 'boolean'],
+            'sizes.*.offline_quantity' => ['prohibited'],                                // stock is shared: there is no separate shop quantity
         ];
     }
 

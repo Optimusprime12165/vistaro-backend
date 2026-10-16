@@ -12,7 +12,7 @@ use App\Services\Settings\BusinessSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/** Admin-only (route group `admin.role:admin`; super_admin passes, staff get 403). */
+/** Admin-only (route group `admin.role:super_admin`; staff get 403). */
 class SettingController extends ApiController
 {
     public function __construct(private readonly BusinessSettingsService $settings)

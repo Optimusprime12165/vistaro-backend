@@ -105,7 +105,7 @@ final class OrderService
             $p = $ps->product;
             OrderItem::query()->create([
                 'order_id' => $order->id, 'product_id' => $p->id, 'product_size_id' => $ps->id,
-                'product_name' => $p->name, 'sku' => $ps->sku ?? $p->sku, 'size' => $ps->size->value,
+                'product_name' => $p->name, 'sku' => $ps->sku ?? $p->sku, 'size' => $ps->size,
                 'color_name' => $item->color?->name, 'color_hex' => $item->color?->hex,
                 'image' => $p->primaryImage ? ImageUrl::resolve($p->primaryImage->path, $p->primaryImage->disk) : null,
                 'unit_price' => $p->price, 'mrp' => $p->mrp, 'quantity' => $item->quantity, 'line_total' => $lines[$item->id]['line_subtotal'],

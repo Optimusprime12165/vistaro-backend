@@ -2,17 +2,22 @@
 
 namespace App\Http\Resources;
 
-use App\Enums\Size;
 use App\Support\ImageUrl;
+use App\Support\SizeCode;
 use App\Support\StockDisplay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Collection;
 
 /**
- * Admin view of a product with REAL stock numbers. Relations that are loaded are shown; nothing is queried here.
- * stock.online: from `sizes` (quantity + reserved); stock.offline: from `offlineStocks`.
- * Status per size: out (0) | low (< 5) | ok.  Product: out when the total is 0, low when any size is below 5.
+ * Admin view of a product with REAL (shared) stock numbers. Relations that are loaded are shown; nothing is queried here.
+ *
+ * `stock` is ONE block built from `sizes` (product_sizes): the same quantities serve online orders and the shop.
+ *  - sizes[].quantity   = shared sellable units of that size, sizes[].reserved = held by unfulfilled online orders
+ *  - sizes[].is_enabled = size can be bought on the website (a disabled size keeps its quantity)
+ *  - total              = DERIVED sum of all sizes' quantities (display only, never stored)
+ *  - sellable_total     = DERIVED sum over enabled sizes; `status` / out_of_stock are judged on enabled sizes
+ * `channel` (online | offline | both | none) only says where the product is visible.
  *
  * @mixin \App\Models\Product
  */
@@ -34,6 +39,8 @@ class AdminProductResource extends JsonResource
             'currency' => $r->currency,
             'attributes' => (object) ($r->attributes ?? []),
             'status' => $r->status->value,
+            'is_active' => $r->status === \App\Enums\ProductStatus::Active,
+            'channel' => $r->channel(),
             'is_available' => $r->is_available,
             'is_offline_available' => $r->is_offline_available,
             'is_bestseller' => $r->is_bestseller,
@@ -47,35 +54,36 @@ class AdminProductResource extends JsonResource
                 'id' => $i->id, 'url' => ImageUrl::resolve($i->path, $i->disk), 'alt' => $i->alt, 'sort_order' => $i->sort_order, 'is_primary' => $i->is_primary,
             ])->values()),
             'colors' => $this->whenLoaded('colors', fn () => $r->colors->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'hex' => $c->hex])->values()),
-            'stock' => array_filter([
-                'online' => $r->relationLoaded('sizes') ? self::block($r->sizes, true) : null,
-                'offline' => $r->relationLoaded('offlineStocks') ? self::block($r->offlineStocks, false) : null,
-            ], fn ($b) => $b !== null),
+            'stock' => $this->whenLoaded('sizes', fn () => self::block($r->sizes)),
             'created_at' => $r->created_at?->toIso8601String(),
             'updated_at' => $r->updated_at?->toIso8601String(),
         ];
     }
 
-    /** @return array{total:int,reserved?:int,status:string,low_stock:bool,out_of_stock:bool,sizes:list<array<string,mixed>>} */
-    public static function block(Collection $rows, bool $withReserved): array
+    /** @return array{total:int,sellable_total:int,reserved:int,status:string,low_stock:bool,out_of_stock:bool,sizes:list<array<string,mixed>>} */
+    public static function block(Collection $rows): array
     {
-        $rows = $rows->sortBy(fn ($s) => ($s->size instanceof Size ? $s->size : Size::from($s->size))->order())->values();
-        $total = (int) $rows->sum('quantity');
-        $out = $total === 0;
-        $low = ! $out && $rows->contains(fn ($s) => StockDisplay::adminStatus($s->quantity) !== 'ok');
+        $rows = $rows->sortBy(fn ($s) => SizeCode::sortKey($s->size))->values();
+        $enabled = $rows->where('is_enabled', true);
+        $sellable = (int) $enabled->sum('quantity');
+        $out = $sellable === 0;
+        $low = ! $out && $enabled->contains(fn ($s) => StockDisplay::adminStatus($s->quantity) !== 'ok');
 
-        return array_filter([
-            'total' => $total,
-            'reserved' => $withReserved ? (int) $rows->sum('reserved') : null,
+        return [
+            'total' => (int) $rows->sum('quantity'),
+            'sellable_total' => $sellable,
+            'reserved' => (int) $rows->sum('reserved'),
             'status' => $out ? 'out' : ($low ? 'low' : 'ok'),
             'low_stock' => $low,
             'out_of_stock' => $out,
-            'sizes' => $rows->map(fn ($s) => array_filter([
-                'size' => $s->size instanceof Size ? $s->size->value : $s->size,
+            'sizes' => $rows->map(fn ($s) => [
+                'id' => $s->id,
+                'size' => $s->size,
                 'quantity' => $s->quantity,
-                'reserved' => $withReserved ? $s->reserved : null,
+                'reserved' => $s->reserved,
+                'is_enabled' => (bool) $s->is_enabled,
                 'status' => StockDisplay::adminStatus($s->quantity),
-            ], fn ($v) => $v !== null))->all(),
-        ], fn ($v) => $v !== null);
+            ])->all(),
+        ];
     }
 }

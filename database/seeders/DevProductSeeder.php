@@ -4,9 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\InventoryLocation;
 use App\Enums\InventoryMovementType;
-use App\Enums\Size;
 use App\Models\InventoryMovement;
-use App\Models\OfflineStock;
 use App\Models\Product;
 use App\Models\ProductColor;
 use App\Models\ProductImage;
@@ -17,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * DEVELOPMENT ONLY. Re-creates the frontend's 32 generated demo products with the same ids, slugs, prices,
- * colours, attributes and the same online/offline stock figures the mock admin used.
+ * colours, attributes and one SHARED stock quantity per size (the shop's old separate counter was merged into it).
  * Ratings/reviews are intentionally NOT seeded (they were fake). Skips products that already exist (by id).
  */
 class DevProductSeeder extends Seeder
@@ -84,24 +82,19 @@ class DevProductSeeder extends Seeder
                     }
 
                     foreach ($d['sizes'] as $k => $sizeCode) {
-                        $size = Size::from($sizeCode);
-                        $online = max(0, $stock - $k * 6);
-                        $offline = max(0, ($id * 7 + $k * 5) % 13 - ($k > 3 ? 3 : 0));
+                        $qty = max(0, $stock - $k * 6)
+                            + max(0, ($id * 7 + $k * 5) % 13 - ($k > 3 ? 3 : 0));       // ONE shared quantity per size
 
-                        // Creating the size also creates its (zero) offline row via the model observer.
                         $ps = ProductSize::query()->create([
-                            'product_id' => $id, 'size' => $size, 'sku' => "{$skuBase}-{$sizeCode}", 'quantity' => $online, 'reserved' => 0,
+                            'product_id' => $id, 'size' => $sizeCode, 'sku' => "{$skuBase}-{$sizeCode}", 'quantity' => $qty, 'reserved' => 0, 'is_enabled' => true,
                         ]);
-                        OfflineStock::query()->where(['product_id' => $id, 'size' => $sizeCode])->update(['quantity' => $offline]);
 
-                        foreach ([[InventoryLocation::Online, $online], [InventoryLocation::Offline, $offline]] as [$loc, $qty]) {
-                            if ($qty > 0) {
-                                InventoryMovement::query()->create([
-                                    'product_size_id' => $ps->id, 'product_id' => $id, 'size' => $sizeCode, 'location' => $loc->value,
-                                    'type' => InventoryMovementType::Initial->value, 'quantity_change' => $qty, 'quantity_after' => $qty,
-                                    'note' => 'Development seed',
-                                ]);
-                            }
+                        if ($qty > 0) {
+                            InventoryMovement::query()->create([
+                                'product_size_id' => $ps->id, 'product_id' => $id, 'size' => $sizeCode, 'location' => InventoryLocation::Online->value,
+                                'type' => InventoryMovementType::Initial->value, 'quantity_change' => $qty, 'quantity_after' => $qty,
+                                'note' => 'Development seed',
+                            ]);
                         }
                     }
                 }

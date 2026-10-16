@@ -33,7 +33,7 @@ trait FulfilmentTestHelpers
         return [Order::findOrFail($id), $p, $user];
     }
 
-    protected function move(int $orderId, string $status, array $extra = [], AdminRole $role = AdminRole::Admin): TestResponse
+    protected function move(int $orderId, string $status, array $extra = [], AdminRole $role = AdminRole::SuperAdmin): TestResponse
     {
         return $this->actingAsAdmin($role)->postJson("/api/v1/admin/orders/{$orderId}/transition", ['status' => $status] + $extra);
     }
@@ -46,7 +46,7 @@ trait FulfilmentTestHelpers
         }
     }
 
-    protected function pickup(int $orderId, AdminRole $role = AdminRole::Admin): TestResponse
+    protected function pickup(int $orderId, AdminRole $role = AdminRole::SuperAdmin): TestResponse
     {
         return $this->actingAsAdmin($role)->postJson("/api/v1/admin/orders/{$orderId}/pickup");
     }

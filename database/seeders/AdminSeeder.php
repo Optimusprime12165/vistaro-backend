@@ -7,8 +7,9 @@ use Illuminate\Database\Seeder;
 
 /**
  * DEVELOPMENT ONLY dummy admin:  admin@vistaro.local / ChangeMe@123
- * Refuses to run outside local/testing, and never modifies an admin that already exists
- * (so it cannot overwrite real credentials).
+ * Refuses to run outside local/testing, never modifies an admin that already exists
+ * (so it cannot overwrite real credentials), and is skipped when a Super Admin already exists
+ * (e.g. created by SuperAdminSeeder), because only ONE Super Admin may exist.
  */
 class AdminSeeder extends Seeder
 {
@@ -16,6 +17,11 @@ class AdminSeeder extends Seeder
     {
         if (! app()->environment(['local', 'testing'])) {
             $this->command?->warn('AdminSeeder skipped: dummy admin is for local/testing only.');
+            return;
+        }
+
+        if (Admin::query()->where('email', 'admin@vistaro.local')->doesntExist() && Admin::query()->where('super_admin_slot', 1)->exists()) {
+            $this->command?->info('AdminSeeder skipped: a Super Admin already exists.');
             return;
         }
 

@@ -4,7 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Http\Requests\ListRequest;
 
-/** Size-wise stock table for either location. */
+/** Size-wise stock table for one channel tab (online = Online + Both products, offline = Offline + Both products). */
 class InventoryIndexRequest extends ListRequest
 {
     public function authorize(): bool

@@ -13,12 +13,18 @@ class CategoryRequest extends FormRequest
         return true;
     }
 
+    /** Category names are unique (the slug is unique too, and is derived from the name when omitted). */
+    protected function uniqueName(): \Illuminate\Validation\Rules\Unique
+    {
+        return Rule::unique('categories', 'name')->ignore($this->route('category')?->id);
+    }
+
     public function rules(): array
     {
         $req = $this->isMethod('POST') ? 'required' : 'sometimes';
 
         return [
-            'name' => [$req, 'string', 'min:2', 'max:120'],
+            'name' => [$req, 'string', 'min:2', 'max:120', $this->uniqueName()],
             'slug' => ['sometimes', 'nullable', 'string', 'max:140', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', Rule::unique('categories', 'slug')->ignore($this->route('category')?->id)],
             'description' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'image' => ['sometimes', 'nullable', 'file', 'image', 'mimes:' . implode(',', config('vistaro.images.mimes')), 'max:' . config('vistaro.images.max_kb')],

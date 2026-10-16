@@ -4,6 +4,8 @@ namespace App\Enums;
 
 enum Size: string
 {
+    case XXXS = 'XXXS';
+    case XXS = 'XXS';
     case XS = 'XS';
     case S = 'S';
     case M = 'M';

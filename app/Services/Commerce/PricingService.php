@@ -26,7 +26,7 @@ final class PricingService
     {
     }
 
-    public const NEEDS_ATTENTION = ['product_unavailable', 'out_of_stock', 'insufficient_stock'];
+    public const NEEDS_ATTENTION = ['product_unavailable', 'size_unavailable', 'out_of_stock', 'insufficient_stock'];
 
     /**
      * @param Collection<int,CartItem> $items with productSize.product.{category,subCategory,primaryImage} and color loaded
@@ -59,7 +59,7 @@ final class PricingService
             $lines[] = [
                 'id' => $item->id,
                 'product' => ['id' => $product->id, 'name' => $product->name, 'slug' => $product->slug, 'sku' => $size->sku ?? $product->sku],
-                'size' => $size->size->value,
+                'size' => $size->size,
                 'color' => $item->color ? ['id' => $item->color->id, 'name' => $item->color->name, 'hex' => $item->color->hex] : null,
                 'image' => $product->primaryImage ? ImageUrl::resolve($product->primaryImage->path, $product->primaryImage->disk) : null,
                 'unit_price' => Money::format($unit),
@@ -108,11 +108,14 @@ final class PricingService
         if (! $visible) {
             return ['code' => 'product_unavailable', 'message' => 'This item is no longer available.'];
         }
+        if (! $size->is_enabled) {
+            return ['code' => 'size_unavailable', 'message' => "Size {$size->size} is no longer available."];
+        }
         if ($size->quantity <= 0) {
-            return ['code' => 'out_of_stock', 'message' => "Size {$size->size->value} is out of stock."];
+            return ['code' => 'out_of_stock', 'message' => "Size {$size->size} is out of stock."];
         }
         if ($size->quantity < $demand) {
-            return ['code' => 'insufficient_stock', 'message' => "Only {$size->quantity} left in size {$size->size->value}."];
+            return ['code' => 'insufficient_stock', 'message' => "Only {$size->quantity} left in size {$size->size}."];
         }
 
         return null;

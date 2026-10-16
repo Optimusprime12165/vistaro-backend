@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Enums\Size;
 use App\Models\Product;
 use App\Models\ProductSize;
+use App\Support\SizeCode;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /** @extends Factory<ProductSize> */
@@ -14,16 +14,22 @@ class ProductSizeFactory extends Factory
 
     public function definition(): array
     {
-        return ['product_id' => Product::factory(), 'size' => Size::M, 'quantity' => 20, 'reserved' => 0];
+        return ['product_id' => Product::factory(), 'size' => 'M', 'quantity' => 20, 'reserved' => 0, 'is_enabled' => true];
     }
 
-    public function size(Size $size): static
+    /** @param \App\Enums\Size|string $size any size code (sizes are dynamic) */
+    public function size(\App\Enums\Size|string $size): static
     {
-        return $this->state(['size' => $size]);
+        return $this->state(['size' => SizeCode::normalize($size instanceof \App\Enums\Size ? $size->value : $size)]);
     }
 
     public function quantity(int $q): static
     {
         return $this->state(['quantity' => $q]);
+    }
+
+    public function disabled(): static
+    {
+        return $this->state(['is_enabled' => false]);
     }
 }

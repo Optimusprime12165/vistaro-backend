@@ -25,6 +25,7 @@ class AdminProductIndexRequest extends ListRequest
             'category_id' => ['sometimes', 'integer', 'min:1'],
             'sub_category_id' => ['sometimes', 'integer', 'min:1'],
             'is_available' => ['sometimes', 'boolean'],
+            'channel' => ['sometimes', 'in:online,offline,both'],
             'stock_status' => ['sometimes', 'in:in,low,out'],
         ];
     }

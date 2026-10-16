@@ -16,9 +16,14 @@ class AdminFactory extends Factory
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'password' => 'password',   // hashed by the model cast
-            'role' => 'admin',
+            'role' => 'staff',
             'is_active' => true,
         ];
+    }
+
+    public function superAdmin(): static
+    {
+        return $this->state(['role' => 'super_admin']);
     }
 
     public function inactive(): static

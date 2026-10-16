@@ -6,6 +6,14 @@ use Illuminate\Validation\Rule;
 
 class SubCategoryRequest extends CategoryRequest
 {
+    /** A sub-category name is unique inside its category. */
+    protected function uniqueName(): \Illuminate\Validation\Rules\Unique
+    {
+        $categoryId = $this->input('category_id', $this->route('sub_category')?->category_id);
+
+        return Rule::unique('sub_categories', 'name')->where('category_id', $categoryId)->ignore($this->route('sub_category')?->id);
+    }
+
     public function rules(): array
     {
         $rules = parent::rules();

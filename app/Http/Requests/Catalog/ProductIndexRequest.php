@@ -2,9 +2,8 @@
 
 namespace App\Http\Requests\Catalog;
 
-use App\Enums\Size;
+use App\Support\SizeCode;
 use App\Http\Requests\ListRequest;
-use Illuminate\Validation\Rule;
 
 /** Public product listing: all filters are validated and whitelisted; nothing reaches SQL unchecked. */
 class ProductIndexRequest extends ListRequest
@@ -38,7 +37,7 @@ class ProductIndexRequest extends ListRequest
             'category' => ['sometimes', 'string', 'max:140'],
             'sub_category' => ['sometimes', 'string', 'max:140'],
             'size' => $list,
-            'size.*' => ['string', Rule::in(Size::values())],
+            'size.*' => ['string', 'max:16', 'regex:' . SizeCode::PATTERN],
             'price_min' => ['sometimes', 'numeric', 'min:0', 'max:10000000'],
             'price_max' => ['sometimes', 'numeric', 'min:0', 'max:10000000', 'gte:price_min'],
             'color' => $list, 'color.*' => $item,

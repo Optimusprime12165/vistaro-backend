@@ -2,9 +2,8 @@
 
 namespace App\Http\Requests\Customer;
 
-use App\Enums\Size;
+use App\Support\SizeCode;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
  * POST: product_id + size (+ color_id) + quantity.  PATCH: any of quantity / size / color_id.
@@ -17,6 +16,13 @@ class CartItemRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('size'))) {
+            $this->merge(['size' => SizeCode::normalize($this->input('size'))]);
+        }
+    }
+
     public function rules(): array
     {
         $max = (int) config('vistaro.cart.max_line_quantity');
@@ -24,14 +30,14 @@ class CartItemRequest extends FormRequest
         if ($this->isMethod('POST')) {
             return [
                 'product_id' => ['required', 'integer', 'min:1'],
-                'size' => ['required', Rule::in(Size::values())],
+                'size' => ['required', ...SizeCode::rules()],
                 'color_id' => ['nullable', 'integer', 'min:1'],
                 'quantity' => ['required', 'integer', 'min:1', "max:{$max}"],
             ];
         }
 
         return [
-            'size' => ['sometimes', Rule::in(Size::values())],
+            'size' => ['sometimes', ...SizeCode::rules()],
             'color_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'quantity' => ['sometimes', 'integer', 'min:1', "max:{$max}"],
         ];

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Support\ImageUrl;
+use App\Support\SizeCode;
 use App\Support\StockDisplay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -18,7 +19,9 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $sizes = $this->sizes->sortBy(fn ($s) => $s->size->order())->values();
+        // Sizes are always the ENABLED ones (the catalogue query filters them); a size with no stock stays listed but unavailable.
+        $sizes = $this->sizes->where('is_enabled', true)->sortBy(fn ($s) => SizeCode::sortKey($s->size))->values();
+        $inStock = $sizes->contains(fn ($s) => $s->quantity > 0);
 
         return [
             'id' => $this->id,
@@ -41,12 +44,14 @@ class ProductResource extends JsonResource
             ])->values(),
             'colors' => $this->colors->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'hex' => $c->hex])->values(),
             'sizes' => $sizes->map(fn ($s) => [
-                'size' => $s->size->value,
+                'size' => $s->size,
                 'available' => $s->quantity > 0,
                 'left' => StockDisplay::storefrontLeft($s->quantity),
                 'label' => StockDisplay::storefrontLabel($s->quantity),
             ])->values(),
-            'in_stock' => $sizes->contains(fn ($s) => $s->quantity > 0),
+            'in_stock' => $inStock,
+            // Every size sold out: the product stays listed (it is NOT hidden) but cannot be bought: show "Out of Stock".
+            'out_of_stock' => ! $inStock,
         ];
     }
 }

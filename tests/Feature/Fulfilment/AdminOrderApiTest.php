@@ -68,7 +68,7 @@ class AdminOrderApiTest extends TestCase
 
         $this->actingAsAdmin(AdminRole::Staff)->getJson('/api/v1/admin/orders')->assertOk();
         $staff = $this->actingAsAdmin(AdminRole::Staff)->getJson("/api/v1/admin/orders/{$order->id}")->assertOk()->json('data.allowed_transitions');
-        $admin = $this->actingAsAdmin(AdminRole::Admin)->getJson("/api/v1/admin/orders/{$order->id}")->assertOk()->json('data.allowed_transitions');
+        $admin = $this->actingAsAdmin(AdminRole::SuperAdmin)->getJson("/api/v1/admin/orders/{$order->id}")->assertOk()->json('data.allowed_transitions');
 
         $this->assertSame(['processing'], $staff);
         $this->assertEqualsCanonicalizing(['processing', 'cancelled'], $admin);

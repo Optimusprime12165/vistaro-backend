@@ -75,7 +75,7 @@ class BusinessSettingsApiTest extends TestCase
         $this->actingAsAdmin(AdminRole::Staff)->patchJson(self::ADMIN . '/shipping.flat_fee', ['value' => 1])->assertStatus(403);
         $this->assertSame(99, $this->svc()->shippingFlatFee());
 
-        $this->actingAsAdmin(AdminRole::Admin)->getJson(self::ADMIN)->assertOk();
+        $this->actingAsAdmin(AdminRole::SuperAdmin)->getJson(self::ADMIN)->assertOk();
         $this->actingAsAdmin(AdminRole::SuperAdmin)->getJson(self::ADMIN)->assertOk();
     }
 

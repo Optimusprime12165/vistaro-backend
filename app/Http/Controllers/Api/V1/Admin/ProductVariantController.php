@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
-use App\Enums\Size;
-use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\V1\ApiController;
 use App\Http\Requests\Admin\ColorsRequest;
 use App\Http\Requests\Admin\SizesRequest;
@@ -30,14 +28,16 @@ class ProductVariantController extends ApiController
     {
         $this->variants->upsertSizes($product, $request->validated('sizes'), $request->user(), $request->validated('note'));
 
-        return $this->ok(AdminProductResource::make($product->load(['sizes', 'offlineStocks']))->resolve($request), 'Sizes updated.');
+        return $this->ok(AdminProductResource::make($product->load(['sizes']))->resolve($request), 'Sizes updated.');
     }
 
     public function removeSize(Request $request, Product $product, string $size): JsonResponse
     {
-        $enum = Size::tryFrom($size) ?? throw new ApiException('Resource not found.', 404);
-        $this->variants->removeSize($product, $enum);
+        $result = $this->variants->removeSize($product, rawurldecode($size));
+        $product->load(['sizes']);
 
-        return $this->ok(AdminProductResource::make($product->load(['sizes', 'offlineStocks']))->resolve($request), 'Size removed.');
+        return $this->ok(AdminProductResource::make($product)->resolve($request) + ['result' => $result], $result === 'disabled'
+            ? 'This size is used by past orders, so it was disabled instead of deleted.'
+            : 'Size removed.');
     }
 }

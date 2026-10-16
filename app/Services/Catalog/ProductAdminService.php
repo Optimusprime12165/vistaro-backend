@@ -7,7 +7,6 @@ use App\Contracts\ImageStorageInterface;
 use App\DTOs\ListQuery;
 use App\Enums\ProductStatus;
 use App\Models\Admin;
-use App\Models\OfflineStock;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductSize;
@@ -24,9 +23,6 @@ use Illuminate\Support\Facades\DB;
 final class ProductAdminService extends AbstractCrudService
 {
     use HandlesCatalogRecords;
-
-    /** Table the stock_status filter looks at: product_sizes (online) or offline_stocks (shop). */
-    private string $stockTable = 'product_sizes';
 
     public function __construct(private readonly ProductVariantService $variants, private readonly ImageStorageInterface $storage)
     {
@@ -59,6 +55,12 @@ final class ProductAdminService extends AbstractCrudService
             'category_id' => 'category_id',
             'sub_category_id' => 'sub_category_id',
             'is_available' => fn (Builder $q, $v) => $q->where('is_available', filter_var($v, FILTER_VALIDATE_BOOLEAN)),
+            'channel' => fn (Builder $q, $v) => match ((string) $v) {      // online | offline | both (shared stock: channel only controls visibility)
+                'online' => $q->where('is_available', true)->where('is_offline_available', false),
+                'offline' => $q->where('is_offline_available', true)->where('is_available', false),
+                'both' => $q->where('is_available', true)->where('is_offline_available', true),
+                default => null,
+            },
             'stock_status' => fn (Builder $q, $v) => $this->stockStatus($q, (string) $v),
         ];
     }
@@ -70,7 +72,7 @@ final class ProductAdminService extends AbstractCrudService
 
     protected function newQuery(): Builder
     {
-        return parent::newQuery()->withSum('sizes as stock_total', 'quantity')->withMin('sizes as stock_min', 'quantity');
+        return parent::newQuery()->withSum('sizes as stock_total', 'quantity')->withMin('sizes as stock_min', 'quantity');   // derived, never stored
     }
 
     // ------------------------------------------------------------------ create
@@ -88,6 +90,7 @@ final class ProductAdminService extends AbstractCrudService
             $data = $this->normalize($data);
             $data['slug'] = ! empty($data['slug']) ? $data['slug'] : $this->uniqueSlug($data['name'], Product::class);
             $data['status'] ??= ProductStatus::Active->value;
+            $data = $this->applyChannel($data, true);
 
             $product = Product::query()->create($data);
 
@@ -98,7 +101,7 @@ final class ProductAdminService extends AbstractCrudService
                 $this->variants->upsertSizes($product, $sizes, $actor, 'Initial stock');
             }
 
-            return $product->load(['category:id,name,slug', 'subCategory:id,name,slug', 'images', 'colors', 'sizes', 'offlineStocks']);
+            return $product->load(['category:id,name,slug', 'subCategory:id,name,slug', 'images', 'colors', 'sizes']);
         });
     }
 
@@ -113,7 +116,7 @@ final class ProductAdminService extends AbstractCrudService
             unset($data['slug']);
         }
 
-        return $this->normalize($data);
+        return $this->applyChannel($this->normalize($data), false);
     }
 
     // ------------------------------------------------------------------ delete
@@ -133,7 +136,7 @@ final class ProductAdminService extends AbstractCrudService
             }
 
             $files = $product->images()->where('disk', '!=', 'external')->get(['disk', 'path']);
-            $product->delete();                      // sizes, offline stock, colours, images cascade
+            $product->delete();                      // sizes (shared stock), colours, images cascade
             DB::afterCommit(fn () => $files->each(fn ($f) => $this->storage->delete($f->disk, $f->path)));
 
             return 'deleted';
@@ -147,16 +150,16 @@ final class ProductAdminService extends AbstractCrudService
 
     // --------------------------------------------------------------- inventory
 
-    /** Size-wise stock table for one location (products only; archived ones are excluded). */
+    /**
+     * Size-wise stock table for one channel tab (products only; archived ones are excluded).
+     * 'online' lists Online + Both products, 'offline' lists Offline + Both products. A "Both" product appears in both tabs
+     * with the SAME shared quantities: the channel only filters which products are listed, it never splits stock.
+     */
     public function inventory(ListQuery $query, string $location): LengthAwarePaginator
     {
-        $offline = $location === 'offline';
-        $rel = $offline ? 'offlineStocks' : 'sizes';
-        $this->stockTable = $offline ? 'offline_stocks' : 'product_sizes';
-
-        $builder = Product::query()->where('status', '!=', ProductStatus::Archived->value)
-            ->with(['subCategory:id,name,slug', 'primaryImage', $rel])
-            ->withSum("{$rel} as stock_total", 'quantity')->withMin("{$rel} as stock_min", 'quantity');
+        $builder = Product::query()->where('status', '!=', ProductStatus::Archived->value)->forChannel($location)
+            ->with(['category:id,name,slug', 'subCategory:id,name,slug', 'primaryImage', 'sizes'])
+            ->withSum('sizes as stock_total', 'quantity')->withMin('sizes as stock_min', 'quantity');
 
         $this->applySearch($builder, $query->search);
         $this->applyFilters($builder, $query->filters);
@@ -165,15 +168,14 @@ final class ProductAdminService extends AbstractCrudService
         return $builder->paginate($query->perPage, ['*'], 'page', $query->page);
     }
 
-    /** Size-level rows below the low-stock threshold (zero included), emptiest first. */
+    /** Size-level rows below the low-stock threshold (zero included), emptiest first, for the products of one channel tab. */
     public function lowStock(ListQuery $query, string $location): Paginator
     {
-        $model = $location === 'offline' ? OfflineStock::class : ProductSize::class;
-
-        return $model::query()
+        return ProductSize::query()
             ->with('product:id,name,sku,slug')
+            ->where('is_enabled', true)
             ->where('quantity', '<', (int) config('vistaro.stock.low_threshold'))
-            ->whereIn('product_id', Product::query()->where('status', '!=', ProductStatus::Archived->value)->select('id'))
+            ->whereIn('product_id', Product::query()->where('status', '!=', ProductStatus::Archived->value)->forChannel($location)->select('id'))
             ->orderBy('quantity')->orderBy('id')
             ->paginate($query->perPage, ['*'], 'page', $query->page);
     }
@@ -203,21 +205,37 @@ final class ProductAdminService extends AbstractCrudService
         return $data;
     }
 
+    /** `channel` (online|offline|both) is the admin-facing switch; it maps onto the two availability flags. */
+    private function applyChannel(array $data, bool $creating): array
+    {
+        $channel = Arr::pull($data, 'channel');
+
+        if ($channel !== null) {
+            $data['is_available'] = in_array($channel, ['online', 'both'], true);
+            $data['is_offline_available'] = in_array($channel, ['offline', 'both'], true);
+        } elseif ($creating) {
+            $data += ['is_available' => true, 'is_offline_available' => true];
+        }
+
+        return $data;
+    }
+
+    /** Stock status over the sellable (enabled) sizes of the shared stock. */
     private function stockStatus(Builder $q, string $status): void
     {
-        $t = $this->stockTable;
+        $t = 'product_sizes';
         $low = (int) config('vistaro.stock.low_threshold');
-        $rows = fn () => fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id');
+        $rows = fn () => fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.is_enabled", true);
 
         match ($status) {
             // nothing in stock in any size (or no sizes at all)
-            'out' => $q->whereNotExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.quantity", '>', 0)),
+            'out' => $q->whereNotExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.is_enabled", true)->where("{$t}.quantity", '>', 0)),
             // something is in stock, but at least one size has fewer than the threshold (zero counts)
-            'low' => $q->whereExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.quantity", '>', 0))
-                ->whereExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.quantity", '<', $low)),
+            'low' => $q->whereExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.is_enabled", true)->where("{$t}.quantity", '>', 0))
+                ->whereExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.is_enabled", true)->where("{$t}.quantity", '<', $low)),
             // has sizes and every one of them is at or above the threshold
             default => $q->whereExists($rows())
-                ->whereNotExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.quantity", '<', $low)),
+                ->whereNotExists(fn ($s) => $s->from($t)->whereColumn("{$t}.product_id", 'products.id')->where("{$t}.is_enabled", true)->where("{$t}.quantity", '<', $low)),
         };
     }
 }

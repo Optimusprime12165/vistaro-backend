@@ -3,18 +3,18 @@
 namespace Tests\Support;
 
 use App\Enums\AdminRole;
-use App\Enums\Size;
 use App\Models\Address;
 use App\Models\Admin;
 use App\Models\Product;
 use App\Models\ProductSize;
 use App\Models\User;
+use App\Support\SizeCode;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use App\Services\Auth\TokenService;
 
 /**
- * RECONSTRUCTED helper. The original tests/Support/CatalogTestHelpers.php (Phases 1-6) was NOT in the supplied files,
+ * RECONSTRUCTED helper (updated for shared stock, dynamic sizes and the single-Super-Admin role model). The original tests/Support/CatalogTestHelpers.php (Phases 1-6) was NOT in the supplied files,
  * so this implements exactly the helper API that the Phase 7 tests call:
  * actingAsAdmin, actingAsCustomer, guest, stock, shopper, makeProduct, addToCart, placeOrder.
  */
@@ -37,9 +37,14 @@ trait CatalogTestHelpers
         return $this->withToken($token->plainTextToken);
     }
 
-    protected function actingAsAdmin(AdminRole $role = AdminRole::Admin): static
+    /** Exactly one active Super Admin may exist, so the helper re-uses it; Staff accounts are created fresh each call. */
+    protected function actingAsAdmin(AdminRole $role = AdminRole::SuperAdmin): static
     {
-        return $this->bearer(Admin::factory()->create(['role' => $role->value]), 'admin');
+        $admin = $role === AdminRole::SuperAdmin
+            ? (Admin::query()->where('role', 'super_admin')->where('is_active', true)->first() ?? Admin::factory()->superAdmin()->create())
+            : Admin::factory()->create(['role' => $role->value]);
+
+        return $this->bearer($admin, 'admin');
     }
 
     protected function actingAsCustomer(User $user): static
@@ -61,7 +66,7 @@ trait CatalogTestHelpers
     {
         $product = Product::factory()->create($attributes);
         foreach ($stock as $size => $qty) {
-            ProductSize::factory()->create(['product_id' => $product->id, 'size' => Size::from((string) $size), 'quantity' => $qty, 'reserved' => 0]);
+            ProductSize::factory()->create(['product_id' => $product->id, 'size' => SizeCode::normalize((string) $size), 'quantity' => $qty, 'reserved' => 0]);
         }
 
         return $product;

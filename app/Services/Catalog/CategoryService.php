@@ -52,7 +52,7 @@ final class CategoryService extends AbstractCrudService
 
     protected function newQuery(): Builder
     {
-        return parent::newQuery()->withCount('subCategories');
+        return parent::newQuery()->withCount(['subCategories', 'products']);
     }
 
     protected function beforeStore(array $data): array
@@ -81,7 +81,10 @@ final class CategoryService extends AbstractCrudService
     protected function beforeDestroy(Model $model): void
     {
         if ($model->subCategories()->exists()) {
-            throw new ConflictException('This category still has sub-categories. Move or delete them first.');
+            throw new ConflictException('This category still has sub-categories (and their products). Deactivate it instead, or move / delete them first.');
+        }
+        if ($model->products()->exists()) {
+            throw new ConflictException('This category still has products. Deactivate it instead.');
         }
     }
 

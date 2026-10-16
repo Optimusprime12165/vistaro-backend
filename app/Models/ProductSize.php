@@ -2,48 +2,38 @@
 
 namespace App\Models;
 
-use App\Enums\Size;
 use Database\Factories\ProductSizeFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Online inventory for one product in one size. `quantity` is what can be sold right now.
- * Stock must only be changed through the inventory service (Phase 5/6), never by ad-hoc ->save().
+ * THE shared stock of one product in one size. `quantity` is what can be sold right now, whether the sale is an
+ * Online order or a manual Offline (shop) adjustment: there is exactly one counter per (product, size).
+ * `reserved` = units held by not-yet-fulfilled online orders (moved out of quantity).
+ * `is_enabled` switches the size on/off for sale WITHOUT touching quantity.
+ * Stock must only be changed through App\Services\Inventory\InventoryService, never by ad-hoc ->save().
  */
 class ProductSize extends Model
 {
     /** @use HasFactory<ProductSizeFactory> */
     use HasFactory;
 
-    protected $fillable = ['product_id', 'size', 'sku', 'quantity', 'reserved'];
+    protected $fillable = ['product_id', 'size', 'sku', 'quantity', 'reserved', 'is_enabled'];
 
     protected function casts(): array
     {
-        return ['size' => Size::class, 'quantity' => 'integer', 'reserved' => 'integer'];
+        return ['quantity' => 'integer', 'reserved' => 'integer', 'is_enabled' => 'boolean'];
     }
 
-    protected static function booted(): void
+    public function scopeEnabled(Builder $q): Builder
     {
-        // Consistency rule: every product-size has a matching (possibly zero) offline stock row.
-        static::created(function (ProductSize $ps) {
-            OfflineStock::query()->firstOrCreate(
-                ['product_id' => $ps->product_id, 'size' => $ps->size->value],
-                ['quantity' => 0],
-            );
-        });
+        return $q->where('is_enabled', true);
     }
 
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
-    }
-
-    public function offlineStock(): HasOne
-    {
-        return $this->hasOne(OfflineStock::class, 'product_id', 'product_id')
-            ->whereColumn('offline_stocks.size', 'product_sizes.size');
     }
 }

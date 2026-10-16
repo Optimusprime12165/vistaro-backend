@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Customer;
 
-use App\Enums\Size;
 use App\Http\Controllers\Api\V1\ApiController;
 use App\Http\Requests\Customer\CartItemRequest;
 use App\Services\Commerce\CartService;
@@ -28,7 +27,7 @@ class CartController extends ApiController
     public function addItem(CartItemRequest $request): JsonResponse
     {
         $v = $request->validated();
-        $cart = $this->cart->add($request->user(), (int) $v['product_id'], Size::from($v['size']), isset($v['color_id']) ? (int) $v['color_id'] : null, (int) $v['quantity']);
+        $cart = $this->cart->add($request->user(), (int) $v['product_id'], $v['size'], isset($v['color_id']) ? (int) $v['color_id'] : null, (int) $v['quantity']);
 
         return $this->created($cart, 'Added to cart.');
     }

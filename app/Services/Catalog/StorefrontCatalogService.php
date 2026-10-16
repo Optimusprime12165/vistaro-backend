@@ -3,7 +3,7 @@
 namespace App\Services\Catalog;
 
 use App\DTOs\ListQuery;
-use App\Enums\Size;
+use App\Support\SizeCode;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductColor;
@@ -45,7 +45,8 @@ final class StorefrontCatalogService
             'subCategory:id,name,slug',
             'images:id,product_id,disk,path,alt,sort_order,is_primary',
             'colors:id,product_id,name,hex,sort_order',
-            'sizes:id,product_id,size,quantity',
+            // only ENABLED sizes are ever shown or sold; quantity is the shared (online + shop) stock
+            'sizes' => fn ($q) => $q->where('is_enabled', true)->select('id', 'product_id', 'size', 'quantity', 'is_enabled'),
         ];
     }
 
@@ -99,9 +100,9 @@ final class StorefrontCatalogService
             ->groupBy('name', 'hex')->orderBy('name')->get()
             ->map(fn ($r) => ['name' => $r->name, 'hex' => $r->hex, 'count' => (int) $r->total])->all();
 
-        $sizes = ProductSize::query()->whereIn('product_id', $ids)->where('quantity', '>', 0)->select('size')->selectRaw('count(*) as total')
-            ->groupBy('size')->get()->sortBy(fn ($r) => Size::from($r->size instanceof Size ? $r->size->value : $r->size)->order())
-            ->map(fn ($r) => ['size' => $r->size instanceof Size ? $r->size->value : $r->size, 'count' => (int) $r->total])->values()->all();
+        $sizes = ProductSize::query()->whereIn('product_id', $ids)->where('is_enabled', true)->where('quantity', '>', 0)->select('size')->selectRaw('count(*) as total')
+            ->groupBy('size')->get()->sortBy(fn ($r) => SizeCode::sortKey($r->size))
+            ->map(fn ($r) => ['size' => $r->size, 'count' => (int) $r->total])->values()->all();
 
         $price = (clone $base)->reorder()->selectRaw('min(price) as min_price, max(price) as max_price')->first();
 
@@ -162,7 +163,8 @@ final class StorefrontCatalogService
 
         if ($sizes = Arr::wrap($f['size'] ?? [])) {
             $q->whereExists(fn ($s) => $s->from('product_sizes')->whereColumn('product_sizes.product_id', 'products.id')
-                ->whereIn('product_sizes.size', $sizes)->where('product_sizes.quantity', '>', 0));
+                ->whereIn('product_sizes.size', array_map([SizeCode::class, 'normalize'], $sizes))
+                ->where('product_sizes.is_enabled', true)->where('product_sizes.quantity', '>', 0));
         }
         if ($colors = Arr::wrap($f['color'] ?? [])) {
             $q->whereExists(fn ($s) => $s->from('product_colors')->whereColumn('product_colors.product_id', 'products.id')->whereIn('product_colors.name', $colors));

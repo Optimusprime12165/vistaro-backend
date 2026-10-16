@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Admin\ProductController;
 use App\Http\Controllers\Api\V1\Admin\ProductImageController;
 use App\Http\Controllers\Api\V1\Admin\ProductVariantController;
 use App\Http\Controllers\Api\V1\Admin\SettingController;
+use App\Http\Controllers\Api\V1\Admin\StaffController;
 use App\Http\Controllers\Api\V1\Admin\SubCategoryController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,7 +23,7 @@ Route::middleware(['auth:admin', 'principal:admin'])->group(function () {
     Route::post('auth/logout-all', [AuthController::class, 'logoutAll'])->name('logout-all');
     Route::patch('auth/password', [AuthController::class, 'changePassword'])->name('password');
 
-    // ---- Read access: any active admin (super_admin, admin, staff)
+    // ---- Read access: any active admin (super_admin or staff)
     Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
     Route::get('categories/{category}', [CategoryController::class, 'show'])->name('categories.show');
     Route::get('sub-categories', [SubCategoryController::class, 'index'])->name('sub-categories.index');
@@ -32,29 +33,39 @@ Route::middleware(['auth:admin', 'principal:admin'])->group(function () {
     Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::get('inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
 
-    // ---- Orders: any admin may read; fulfilment actions are open to staff too (cancel / returns / refunds are admin-only, enforced per target status)
+    // ---- Orders: any admin may read; fulfilment actions are open to staff too (cancel / returns / refunds are Super-Admin-only, enforced per target status)
     Route::get('orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('orders/{id}', [OrderController::class, 'show'])->whereNumber('id')->name('orders.show');
     Route::get('orders/{id}/tracking', [OrderController::class, 'tracking'])->whereNumber('id')->name('orders.tracking');
     Route::get('orders/{id}/label', [OrderController::class, 'label'])->whereNumber('id')->name('orders.label');
 
-    Route::middleware('admin.role:admin,staff')->group(function () {
+    Route::middleware('admin.role:staff')->group(function () {
         Route::post('orders/{id}/transition', [OrderController::class, 'transition'])->whereNumber('id')->name('orders.transition');
         Route::post('orders/{id}/pickup', [OrderController::class, 'pickup'])->whereNumber('id')->name('orders.pickup');
         Route::post('orders/{id}/tracking/sync', [OrderController::class, 'sync'])->whereNumber('id')->name('orders.tracking.sync');
     });
 
-    // ---- Stock changes: admin + staff (super_admin always passes)
-    Route::middleware('admin.role:admin,staff')->group(function () {
+    // ---- Manual SHARED-stock changes (e.g. -2 after two shop sales): Staff and Super Admin. One quantity per size serves online and the shop.
+    Route::middleware('admin.role:staff')->group(function () {
         Route::put('products/{product}/stock', [InventoryController::class, 'set'])->name('products.stock.set');
         Route::post('products/{product}/stock/adjust', [InventoryController::class, 'adjust'])->name('products.stock.adjust');
     });
 
-    // ---- Catalogue management, refunds, customers: admin only (super_admin always passes); staff get 403
-    Route::middleware('admin.role:admin')->group(function () {
+    // ---- Super Admin only (Staff get 403): products, sizes, categories, staff management, refunds, customers, settings
+    Route::middleware('admin.role:super_admin')->group(function () {
+        // Staff Management (exactly one Super Admin; everybody else is Staff). No role can be set through the API.
+        Route::get('staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::post('staff', [StaffController::class, 'store'])->name('staff.store');
+        Route::get('staff/{admin}', [StaffController::class, 'show'])->whereNumber('admin')->name('staff.show');
+        Route::patch('staff/{admin}', [StaffController::class, 'update'])->whereNumber('admin')->name('staff.update');
+        Route::post('staff/{admin}/activate', [StaffController::class, 'activate'])->whereNumber('admin')->name('staff.activate');
+        Route::post('staff/{admin}/deactivate', [StaffController::class, 'deactivate'])->whereNumber('admin')->name('staff.deactivate');
+        Route::put('staff/{admin}/password', [StaffController::class, 'resetPassword'])->whereNumber('admin')->name('staff.password');
+
         Route::post('orders/{id}/refund', [OrderController::class, 'refund'])->whereNumber('id')->name('orders.refund');
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::get('customers/{id}', [CustomerController::class, 'show'])->whereNumber('id')->name('customers.show');
+        Route::get('customers/{id}/addresses', [CustomerController::class, 'addresses'])->whereNumber('id')->name('customers.addresses');
         Route::get('login-events', [CustomerController::class, 'loginEvents'])->name('login-events.index');
 
         // Business settings (dynamic shipping / return rules, store info). Admin only, including reads. Keys look like shipping.flat_fee.

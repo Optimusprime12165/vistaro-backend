@@ -62,7 +62,7 @@ class AdminOrderResource extends JsonResource
 
         return collect($from->next())
             ->reject(fn (OrderStatus $s) => $s === OrderStatus::PickupRequested)
-            ->reject(fn (OrderStatus $s) => $s->requiresAdminRole() && ! $admin?->hasRole(\App\Enums\AdminRole::Admin))
+            ->reject(fn (OrderStatus $s) => $s->requiresAdminRole() && ! $admin?->hasRole(\App\Enums\AdminRole::SuperAdmin))
             ->map(fn (OrderStatus $s) => $s->value)->values()->all();
     }
 

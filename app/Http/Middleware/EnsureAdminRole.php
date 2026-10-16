@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Usage (after auth:admin + principal:admin):  ->middleware('admin.role:admin,staff')
+ * Usage (after auth:admin + principal:admin):  ->middleware('admin.role:staff')  = any admin (staff or super_admin)
+ *                                                ->middleware('admin.role:super_admin')  = Super Admin only
  * super_admin always passes. Role comes from the authenticated admin row, never from the request.
  */
 final class EnsureAdminRole
