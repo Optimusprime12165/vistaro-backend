@@ -6,6 +6,8 @@ use App\Contracts\DeliveryProviderInterface;
 use App\Contracts\ImageStorageInterface;
 use App\Contracts\OtpDeliveryInterface;
 use App\Contracts\PaymentGatewayInterface;
+use App\Services\Otp\ChannelOtpDelivery;
+use App\Services\Otp\EmailOtpDelivery;
 use App\Services\Otp\LogOtpDelivery;
 use App\Services\Payment\MockPaymentGateway;
 use App\Services\Settings\BusinessSettingsService;
@@ -28,10 +30,14 @@ class VistaroServiceProvider extends ServiceProvider
         // one settings snapshot per request / job (scoped), so a long-lived worker never serves a stale per-request memo
         $this->app->scoped(BusinessSettingsService::class);
 
-        $this->app->bind(OtpDeliveryInterface::class, fn () => match (config('vistaro.otp.delivery')) {
-            'log' => new LogOtpDelivery(),
-            default => throw new InvalidArgumentException('Unsupported OTP_DELIVERY: ' . config('vistaro.otp.delivery')),
-        });
+        // Mobile numbers go to the configured SMS provider; email addresses always go through Laravel Mail (MAIL_MAILER).
+        $this->app->bind(OtpDeliveryInterface::class, fn () => new ChannelOtpDelivery(
+            match (config('vistaro.otp.delivery')) {
+                'log' => new LogOtpDelivery(),
+                default => throw new InvalidArgumentException('Unsupported OTP_DELIVERY: ' . config('vistaro.otp.delivery')),
+            },
+            new EmailOtpDelivery(),
+        ));
 
         $this->app->bind(DeliveryProviderInterface::class, fn () => match (config('vistaro.shipping.provider')) {
             'mock' => new MockDeliveryProvider(),
@@ -68,11 +74,14 @@ class VistaroServiceProvider extends ServiceProvider
             Limit::perMinute(20)->by($r->ip()),
         ]);
 
+        // The identifier is the mobile OR the email (signed-in profile verification sends neither: it falls back to the user id).
+        $id = fn (Request $r): string => ($str($r, 'mobile') ?: $str($r, 'email')) ?: (string) ($r->user()?->getAuthIdentifier() ?? '');
+
         RateLimiter::for('otp-request', fn (Request $r) => [
             Limit::perMinute(5)->by($r->ip()),
-            Limit::perMinute(3)->by($str($r, 'mobile') . '|' . $r->ip()),
+            Limit::perMinute(3)->by($id($r) . '|' . $r->ip()),
         ]);
 
-        RateLimiter::for('otp-verify', fn (Request $r) => Limit::perMinute(10)->by($str($r, 'mobile') . '|' . $r->ip()));
+        RateLimiter::for('otp-verify', fn (Request $r) => Limit::perMinute(10)->by($id($r) . '|' . $r->ip()));
     }
 }

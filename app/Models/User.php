@@ -11,18 +11,19 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
-/** Customer. Authenticates by mobile OTP only; there is no password. */
+/** Customer. Authenticates by mobile OR email OTP only; there is no password. */
 class User extends Authenticatable implements ActiveAccount
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory;
 
-    protected $fillable = ['name', 'email', 'mobile', 'mobile_verified_at', 'status', 'last_login_at'];
+    protected $fillable = ['name', 'email', 'email_verified_at', 'mobile', 'mobile_verified_at', 'status', 'last_login_at'];
 
     protected function casts(): array
     {
         return [
             'mobile_verified_at' => 'datetime',
+            'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'status' => AccountStatus::class,
         ];

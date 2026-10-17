@@ -15,12 +15,22 @@ Route::prefix('auth/otp')->name('customer.otp.')->group(function () {
     Route::post('verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp-verify')->name('verify');
 });
 
+// Public: email OTP sign-in / sign-up (same limits and storage as mobile OTP; the email is the identifier)
+Route::prefix('auth/email-otp')->name('customer.email-otp.')->group(function () {
+    Route::post('request', [AuthController::class, 'requestEmailOtp'])->middleware('throttle:otp-request')->name('request');
+    Route::post('resend', [AuthController::class, 'resendEmailOtp'])->middleware('throttle:otp-request')->name('resend');
+    Route::post('verify', [AuthController::class, 'verifyEmailOtp'])->middleware('throttle:otp-verify')->name('verify');
+});
+
 // Authenticated customer (bearer token whose owner is a User and whose ability is "customer")
 Route::middleware(['auth:customer', 'principal:customer'])->name('customer.')->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('logout');
     Route::post('auth/logout-all', [AuthController::class, 'logoutAll'])->name('logout-all');
     Route::get('me', [ProfileController::class, 'show'])->name('me');
     Route::patch('me', [ProfileController::class, 'update'])->name('me.update');
+    Route::post('me/email/otp', [ProfileController::class, 'requestEmailVerification'])->middleware('throttle:otp-request')->name('me.email.request');
+    Route::post('me/email/otp/resend', [ProfileController::class, 'resendEmailVerification'])->middleware('throttle:otp-request')->name('me.email.resend');
+    Route::post('me/email/verify', [ProfileController::class, 'verifyEmail'])->middleware('throttle:otp-verify')->name('me.email.verify');
 
     // Addresses (a customer only ever sees/changes their own)
     Route::get('addresses', [AddressController::class, 'index'])->name('addresses.index');

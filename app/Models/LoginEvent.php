@@ -9,7 +9,7 @@ class LoginEvent extends Model
 {
     public const UPDATED_AT = null;
 
-    protected $fillable = ['user_id', 'mobile', 'ip', 'user_agent', 'method'];
+    protected $fillable = ['user_id', 'mobile', 'email', 'ip', 'user_agent', 'method'];
 
     public function user(): BelongsTo
     {

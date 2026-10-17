@@ -7,6 +7,7 @@ use App\Exceptions\ApiException;
 use App\Exceptions\TooManyAttemptsException;
 use App\Models\OtpThrottle;
 use App\Models\OtpVerification;
+use App\Support\EmailAddress;
 use App\Support\MobileNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -113,7 +114,7 @@ final class OtpService
         } catch (Throwable $e) {
             $this->refund($mobile, $purpose, $outcome['otp_id']);
             // Never log the OTP or the full number.
-            Log::error('OTP delivery failed', ['mobile' => MobileNumber::mask($mobile), 'exception' => $e::class]);
+            Log::error('OTP delivery failed', ['mobile' => str_contains($mobile, '@') ? EmailAddress::mask($mobile) : MobileNumber::mask($mobile), 'exception' => $e::class]);
             throw new ApiException('We could not send the OTP right now. Please try again shortly.', 503);
         }
 

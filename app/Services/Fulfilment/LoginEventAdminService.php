@@ -47,7 +47,10 @@ final class LoginEventAdminService extends AbstractCrudService
     {
         $term = trim((string) $term);
         if ($term !== '') {
-            $builder->where(fn (Builder $q) => $this->orWhereMobile($q, 'mobile', $term));
+            $builder->where(function (Builder $q) use ($term) {
+                $this->orWhereMobile($q, 'mobile', $term);
+                $q->orWhere('email', 'like', $this->escapeLike(mb_strtolower($term)) . '%');
+            });
         }
     }
 
