@@ -19,7 +19,7 @@ return [
                     ',',
                     (string) env(
                         'FRONTEND_URL',
-                        'http://localhost:3000,http://192.168.1.54:3000,https://accipitral-chlamydate-leo.ngrok-free.dev'
+                        'https://vistaro-qosn.onrender.com'
                     )
                 )
             )
