@@ -18,6 +18,7 @@ class SubCategoryResource extends JsonResource
             'description' => $this->description,
             'image' => ImageUrl::resolve($this->image_path),
             'sort_order' => $this->sort_order,
+            'category_id' => $this->category_id,
             'products_count' => $this->whenCounted('products'),
             'category' => $this->whenLoaded('category', fn () => ['id' => $this->category->id, 'name' => $this->category->name, 'slug' => $this->category->slug]),
         ] + ($request->routeIs('v1.admin.*') ? ['is_active' => $this->is_active, 'category_id' => $this->category_id] : []);

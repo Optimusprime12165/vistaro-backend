@@ -120,11 +120,17 @@ final class StorefrontCatalogService
     {
         $count = fn ($q) => $q->storefront();
 
-        return Category::query()->where('is_active', true)->orderBy('sort_order')->orderBy('id')
+        $categories = Category::query()->where('is_active', true)->orderBy('sort_order')->orderBy('id')
             ->withCount(['products as products_count' => $count])
             ->with(['subCategories' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')->orderBy('id')
                 ->withCount(['products as products_count' => $count])])
             ->get();
+
+        // Hand every sub-category its already-loaded parent so SubCategoryResource can expose the parent
+        // relationship ({id, name, slug}) without issuing one extra query per sub-category (no N+1).
+        $categories->each(fn (Category $c) => $c->subCategories->each(fn (SubCategory $s) => $s->setRelation('category', $c)));
+
+        return $categories;
     }
 
     public function category(string $slug): ?Category
