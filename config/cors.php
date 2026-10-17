@@ -19,7 +19,7 @@ return [
                     ',',
                     (string) env(
                         'FRONTEND_URL',
-                        'http://localhost:3000,https://accipitral-chlamydate-leo.ngrok-free.dev'
+                        'http://localhost:3000,http://192.168.1.54:3000,https://accipitral-chlamydate-leo.ngrok-free.dev'
                     )
                 )
             )
@@ -34,6 +34,7 @@ return [
         'Accept',
         'Idempotency-Key',
         'X-Requested-With',
+        'ngrok-skip-browser-warning',   // sent by the frontend when the API is served through a free ngrok tunnel
     ],
 
     'exposed_headers' => [
