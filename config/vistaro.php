@@ -23,6 +23,9 @@ return [
         'window_seconds'       => 86400,        // rolling daily window anchored at first issuance
         'cooldowns'            => [1 => 30, 2 => 60], // seconds to wait after issuance #1 and #2
         'max_verify_attempts'  => (int) env('OTP_MAX_VERIFY_ATTEMPTS', 5),
+        // TESTING ONLY: opt in on the private test deployment to use one predictable OTP and skip delivery/logging.
+        'fixed_enabled'        => filter_var(env('OTP_FIXED_ENABLED', false), FILTER_VALIDATE_BOOL),
+        'fixed_code'            => (string) env('OTP_FIXED_CODE', '637485'),
         'delivery'             => env('OTP_DELIVERY', 'log'), // log (local/testing only) | sms (not implemented yet)
     ],
 

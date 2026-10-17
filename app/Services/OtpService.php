@@ -45,7 +45,16 @@ final class OtpService
     public function issue(string $mobile, string $purpose = 'login', ?string $ip = null, bool $isResend = false): array
     {
         $cfg = config('vistaro.otp');
-        $code = str_pad((string) random_int(0, (10 ** $cfg['length']) - 1), $cfg['length'], '0', STR_PAD_LEFT);
+        $fixedEnabled = (bool) ($cfg['fixed_enabled'] ?? false);
+        if ($fixedEnabled) {
+            $fixedCode = (string) ($cfg['fixed_code'] ?? '');
+            if (! preg_match('/^\d{' . (int) $cfg['length'] . '}$/', $fixedCode)) {
+                throw new \LogicException('OTP_FIXED_CODE must contain exactly ' . (int) $cfg['length'] . ' digits when OTP_FIXED_ENABLED=true.');
+            }
+            $code = $fixedCode;
+        } else {
+            $code = str_pad((string) random_int(0, (10 ** $cfg['length']) - 1), $cfg['length'], '0', STR_PAD_LEFT);
+        }
 
         $this->ensureThrottleRow($mobile, $purpose);
 
@@ -108,14 +117,18 @@ final class OtpService
             ]);
         }
 
-        // Delivery happens AFTER the transaction so no database lock is held during a network call.
-        try {
-            $this->delivery->send($mobile, $code, $purpose);
-        } catch (Throwable $e) {
-            $this->refund($mobile, $purpose, $outcome['otp_id']);
-            // Never log the OTP or the full number.
-            Log::error('OTP delivery failed', ['mobile' => str_contains($mobile, '@') ? EmailAddress::mask($mobile) : MobileNumber::mask($mobile), 'exception' => $e::class]);
-            throw new ApiException('We could not send the OTP right now. Please try again shortly.', 503);
+        // Fixed OTP mode is for private testing only: keep the normal hashed OTP record,
+        // but skip delivery entirely so the OTP is never written to application logs.
+        // In normal mode, delivery happens after the transaction to avoid holding DB locks.
+        if (! $fixedEnabled) {
+            try {
+                $this->delivery->send($mobile, $code, $purpose);
+            } catch (Throwable $e) {
+                $this->refund($mobile, $purpose, $outcome['otp_id']);
+                // Never log the OTP or the full number.
+                Log::error('OTP delivery failed', ['mobile' => str_contains($mobile, '@') ? EmailAddress::mask($mobile) : MobileNumber::mask($mobile), 'exception' => $e::class]);
+                throw new ApiException('We could not send the OTP right now. Please try again shortly.', 503);
+            }
         }
 
         return [
