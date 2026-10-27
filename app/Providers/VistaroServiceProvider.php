@@ -6,6 +6,9 @@ use App\Contracts\DeliveryProviderInterface;
 use App\Contracts\ImageStorageInterface;
 use App\Contracts\OtpDeliveryInterface;
 use App\Contracts\PaymentGatewayInterface;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\SubCategory;
 use App\Services\Otp\ChannelOtpDelivery;
 use App\Services\Otp\EmailOtpDelivery;
 use App\Services\Otp\LogOtpDelivery;
@@ -13,6 +16,7 @@ use App\Services\Payment\MockPaymentGateway;
 use App\Services\Settings\BusinessSettingsService;
 use App\Services\Shipping\MockDeliveryProvider;
 use App\Services\Storage\DiskImageStorage;
+use App\Support\CatalogCache;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -55,6 +59,12 @@ class VistaroServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+
+        // Public catalogue cache (CatalogCache) is dropped whenever the data behind it changes.
+        foreach ([Category::class, SubCategory::class, Product::class] as $model) {
+            $model::saved(fn () => CatalogCache::flush());
+            $model::deleted(fn () => CatalogCache::flush());
+        }
     }
 
     /**

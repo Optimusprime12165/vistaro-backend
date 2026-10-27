@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Customer;
 
 use App\Http\Controllers\Api\V1\ApiController;
 use App\Http\Requests\Customer\CartItemRequest;
+use App\Http\Requests\Customer\GuestCartLinesRequest;
 use App\Services\Commerce\CartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,12 @@ class CartController extends ApiController
     public function show(Request $request): JsonResponse
     {
         return $this->ok($this->cart->view($request->user()));
+    }
+
+    /** Folds the browser's guest cart into the signed-in customer's cart (max-quantity policy, safe to retry). */
+    public function merge(GuestCartLinesRequest $request): JsonResponse
+    {
+        return $this->ok($this->cart->mergeGuest($request->user(), $request->lines()), 'Cart merged.');
     }
 
     public function destroy(Request $request): JsonResponse

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Customer\AddressController;
 use App\Http\Controllers\Api\V1\Customer\AuthController;
 use App\Http\Controllers\Api\V1\Customer\CartController;
 use App\Http\Controllers\Api\V1\Customer\CheckoutController;
+use App\Http\Controllers\Api\V1\Customer\GuestCartController;
 use App\Http\Controllers\Api\V1\Customer\OrderController;
 use App\Http\Controllers\Api\V1\Customer\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -22,6 +23,9 @@ Route::prefix('auth/email-otp')->name('customer.email-otp.')->group(function () 
     Route::post('verify', [AuthController::class, 'verifyEmailOtp'])->middleware('throttle:otp-verify')->name('verify');
 });
 
+// Public + stateless: price a guest's browser-held cart (nothing is stored; only public catalogue data is returned)
+Route::post('cart/guest/preview', [GuestCartController::class, 'preview'])->middleware('throttle:60,1')->name('customer.cart.guest-preview');
+
 // Authenticated customer (bearer token whose owner is a User and whose ability is "customer")
 Route::middleware(['auth:customer', 'principal:customer'])->name('customer.')->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('logout');
@@ -30,6 +34,9 @@ Route::middleware(['auth:customer', 'principal:customer'])->name('customer.')->g
     Route::patch('me', [ProfileController::class, 'update'])->name('me.update');
     Route::post('me/email/otp', [ProfileController::class, 'requestEmailVerification'])->middleware('throttle:otp-request')->name('me.email.request');
     Route::post('me/email/otp/resend', [ProfileController::class, 'resendEmailVerification'])->middleware('throttle:otp-request')->name('me.email.resend');
+    Route::post('me/mobile/otp', [ProfileController::class, 'requestMobileVerification'])->middleware('throttle:otp-request')->name('me.mobile.request');
+    Route::post('me/mobile/otp/resend', [ProfileController::class, 'resendMobileVerification'])->middleware('throttle:otp-request')->name('me.mobile.resend');
+    Route::post('me/mobile/verify', [ProfileController::class, 'verifyMobile'])->middleware('throttle:otp-verify')->name('me.mobile.verify');
     Route::post('me/email/verify', [ProfileController::class, 'verifyEmail'])->middleware('throttle:otp-verify')->name('me.email.verify');
 
     // Addresses (a customer only ever sees/changes their own)
@@ -43,6 +50,7 @@ Route::middleware(['auth:customer', 'principal:customer'])->name('customer.')->g
     // Cart (server-priced)
     Route::get('cart', [CartController::class, 'show'])->name('cart.show');
     Route::delete('cart', [CartController::class, 'destroy'])->name('cart.clear');
+    Route::post('cart/merge', [CartController::class, 'merge'])->middleware('throttle:30,1')->name('cart.merge');
     Route::post('cart/items', [CartController::class, 'addItem'])->name('cart.items.store');
     Route::patch('cart/items/{id}', [CartController::class, 'updateItem'])->whereNumber('id')->name('cart.items.update');
     Route::delete('cart/items/{id}', [CartController::class, 'removeItem'])->whereNumber('id')->name('cart.items.destroy');

@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\V1\ApiController;
 use App\Http\Resources\CategoryResource;
 use App\Services\Catalog\StorefrontCatalogService;
+use App\Support\CatalogCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,7 +18,8 @@ class CategoryController extends ApiController
 
     public function index(Request $request): JsonResponse
     {
-        return $this->ok(CategoryResource::collection($this->catalog->categories())->resolve($request));
+        // Public, identical for every visitor: cached briefly (flushed whenever a category, sub-category or product changes).
+        return $this->ok(CatalogCache::remember('categories', fn () => CategoryResource::collection($this->catalog->categories())->resolve($request)));
     }
 
     public function show(Request $request, string $slug): JsonResponse

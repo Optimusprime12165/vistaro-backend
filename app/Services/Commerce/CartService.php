@@ -110,6 +110,126 @@ final class CartService
         return $this->view($user);
     }
 
+    // ---------------------------------------------------------------- guest cart (lines live in the visitor's browser)
+
+    /**
+     * Prices lines held in a guest's browser. NOTHING is stored and no customer data is read: only public catalogue
+     * data is returned, priced by the same PricingService as a real cart. Lines that can no longer be bought are
+     * dropped and reported in `dropped`.
+     *
+     * @param list<array{product_id:int|string,size:string,color_id?:int|string|null,quantity:int|string}> $lines
+     * @return array<string,mixed>
+     */
+    public function previewGuest(array $lines): array
+    {
+        $max = (int) config('vistaro.cart.max_line_quantity');
+        $wanted = $this->normaliseGuestLines($lines);
+
+        $products = $wanted === [] ? new Collection() : $this->catalog->visible()
+            ->with(['sizes', 'colors', 'category:id,name,slug,is_active', 'subCategory:id,name,slug,is_active', 'primaryImage'])
+            ->whereIn('id', array_values(array_unique(array_column($wanted, 'product_id'))))
+            ->get()->keyBy('id');
+
+        $items = new Collection();
+        $dropped = [];
+
+        foreach ($wanted as $idx => $l) {
+            $product = $products->get($l['product_id']);
+            $size = $product?->sizes->firstWhere('size', $l['size']);
+            $color = $product && $l['color_id'] !== null ? $product->colors->firstWhere('id', $l['color_id']) : null;
+            $colorOk = $product && ($product->colors->isEmpty() ? $l['color_id'] === null : $color !== null);
+
+            if (! $product || ! $size || ! $size->is_enabled || ! $colorOk) {
+                $dropped[] = ['product_id' => $l['product_id'], 'size' => $l['size'], 'reason' => 'unavailable'];
+
+                continue;
+            }
+
+            $size->setRelation('product', $product);
+            $item = new CartItem(['product_size_id' => $size->id, 'product_color_id' => $color?->id, 'quantity' => min($l['quantity'], $max)]);
+            $item->id = $idx + 1;                               // synthetic: position in the (folded) request, so the browser can map a line back
+            $item->setRelation('productSize', $size);
+            $item->setRelation('color', $color);
+            $items->push($item);
+        }
+
+        return ['id' => null, 'dropped' => $dropped] + $this->pricing->build($items);
+    }
+
+    /**
+     * Merges a guest's browser cart into the signed-in customer's cart after login.
+     * Policy (documented, deterministic, RETRY-SAFE): for every guest line the resulting quantity is
+     * max(quantity already in the customer's cart, guest quantity), capped by the per-line maximum and by live stock.
+     * Running the same merge twice therefore changes nothing the second time (a sum policy would double the quantities).
+     * Lines that are no longer purchasable are skipped. Prices are never read from the client.
+     *
+     * @param list<array{product_id:int|string,size:string,color_id?:int|string|null,quantity:int|string}> $lines
+     */
+    public function mergeGuest(User $user, array $lines): array
+    {
+        $max = (int) config('vistaro.cart.max_line_quantity');
+        $wanted = $this->normaliseGuestLines($lines);
+
+        DB::transaction(function () use ($user, $wanted, $max) {
+            $cart = $this->lockedCart($user);
+
+            foreach ($wanted as $l) {
+                try {
+                    [$ps] = $this->resolveTarget($l['product_id'], $l['size'], $l['color_id']);
+                } catch (ValidationException) {
+                    continue;                                   // product/size/colour changed or vanished
+                }
+
+                $line = $this->findLine($cart, $ps->id, $l['color_id']);
+                $room = max(0, min($max, $ps->quantity - $this->otherUnits($cart, $ps->id, $line?->id)));
+                $target = min(max($line?->quantity ?? 0, $l['quantity']), $room);
+
+                if ($target <= 0) {
+                    continue;
+                }
+                if ($line) {
+                    if ($target > $line->quantity) {
+                        $line->update(['quantity' => $target]);
+                    }
+                } else {
+                    $cart->items()->create(['product_size_id' => $ps->id, 'product_color_id' => $l['color_id'], 'quantity' => $target]);
+                }
+            }
+        }, 3);
+
+        return $this->view($user);
+    }
+
+    /**
+     * Sanitises client-supplied lines and folds duplicates (same product + size + colour) into one line.
+     *
+     * @return list<array{product_id:int,size:string,color_id:?int,quantity:int}>
+     */
+    private function normaliseGuestLines(array $lines): array
+    {
+        $max = (int) config('vistaro.cart.max_line_quantity');
+        $out = [];
+
+        foreach (array_slice($lines, 0, 50) as $l) {
+            if (! is_array($l) || ! isset($l['product_id'], $l['size'], $l['quantity']) || ! is_string($l['size'])) {
+                continue;
+            }
+            $pid = (int) $l['product_id'];
+            $qty = (int) $l['quantity'];
+            $color = isset($l['color_id']) && $l['color_id'] !== '' ? (int) $l['color_id'] : null;
+            if ($pid < 1 || $qty < 1) {
+                continue;
+            }
+            $size = SizeCode::normalize($l['size']);
+            $key = "{$pid}|{$size}|" . ($color ?? '-');
+            $out[$key] = isset($out[$key])
+                ? array_merge($out[$key], ['quantity' => min($max, $out[$key]['quantity'] + $qty)])
+                : ['product_id' => $pid, 'size' => $size, 'color_id' => $color, 'quantity' => min($max, $qty)];
+        }
+
+        return array_values($out);
+    }
+
     // ---------------------------------------------------------------- internals
 
     private function lockedCart(User $user): Cart

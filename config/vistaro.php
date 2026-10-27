@@ -81,6 +81,8 @@ return [
 
     'cache' => [
         'catalog_ttl' => (int) env('CATALOG_CACHE_TTL', 300),
+        // PUBLIC catalogue payloads (GET /categories) - flushed on any category/sub-category/product change; 0 disables
+        'catalog_public_ttl' => (int) env('CATALOG_PUBLIC_CACHE_TTL', 60),
     ],
 
     // business_settings (dynamic, DB-backed). The shipping / return values above stay as the DEFAULTS used when a setting row

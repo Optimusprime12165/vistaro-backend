@@ -3,6 +3,7 @@
 use App\Exceptions\ApiExceptionRenderer;
 use App\Http\Middleware\EnsureAdminRole;
 use App\Http\Middleware\EnsurePrincipal;
+use App\Http\Middleware\PublicCacheHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'principal' => EnsurePrincipal::class,
             'admin.role' => EnsureAdminRole::class,
+            'public.cache' => PublicCacheHeaders::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

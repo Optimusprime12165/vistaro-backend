@@ -11,7 +11,7 @@ Route::get('health', [HealthController::class, 'health'])->name('health');
 Route::get('ready', [HealthController::class, 'ready'])->name('ready');
 
 // Public storefront catalogue (only active, available data is ever returned)
-Route::name('catalog.')->group(function () {
+Route::middleware('public.cache:30,60')->name('catalog.')->group(function () {
     Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
     Route::get('categories/{slug}', [CategoryController::class, 'show'])->name('categories.show');
     Route::get('sub-categories', [SubCategoryController::class, 'index'])->name('sub-categories.index');
@@ -23,5 +23,7 @@ Route::name('catalog.')->group(function () {
 });
 
 // Public business settings: ONLY rows flagged is_public (store contact, shipping fee / free-shipping threshold, return window ...)
-Route::get('settings', [PublicSettingController::class, 'index'])->name('settings.index');
-Route::get('settings/{key}', [PublicSettingController::class, 'show'])->where('key', '[a-z0-9_.]+')->name('settings.show');
+Route::middleware('public.cache:30,60')->group(function () {
+    Route::get('settings', [PublicSettingController::class, 'index'])->name('settings.index');
+    Route::get('settings/{key}', [PublicSettingController::class, 'show'])->where('key', '[a-z0-9_.]+')->name('settings.show');
+});

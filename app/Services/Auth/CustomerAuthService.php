@@ -86,6 +86,45 @@ final class CustomerAuthService
         return $user->refresh();
     }
 
+    // ---------------------------------------------------------------- add + verify a mobile number (signed-in, e.g. email-OTP customers)
+
+    /** @return array<string,mixed> see OtpService::issue */
+    public function requestMobileVerification(User $user, string $mobile, ?string $ip, bool $isResend = false): array
+    {
+        $this->assertCanAttachMobile($user, $mobile);
+
+        return $this->otp->issue($mobile, 'verify_mobile', $ip, $isResend);
+    }
+
+    /**
+     * The number is written to the profile (and marked verified) ONLY after its OTP verifies, in one step.
+     * A mobile that is already on this account is never replaced here, and one that belongs to another account is refused
+     * (accounts are never merged or duplicated automatically).
+     */
+    public function confirmMobileVerification(User $user, string $mobile, string $code): User
+    {
+        $this->assertCanAttachMobile($user, $mobile);
+        $this->otp->verify($mobile, $code, 'verify_mobile');
+
+        try {
+            $user->forceFill(['mobile' => $mobile, 'mobile_verified_at' => now()])->save();
+        } catch (UniqueConstraintViolationException) {
+            throw new ApiException('This mobile number is already linked to another account.', 422, ['mobile' => ['This mobile number is already in use.']]);
+        }
+
+        return $user->refresh();
+    }
+
+    private function assertCanAttachMobile(User $user, string $mobile): void
+    {
+        if ($user->mobile !== null && $user->mobile !== '') {
+            throw new ApiException('A mobile number is already on this account and cannot be replaced here.', 422, ['mobile' => ['A mobile number is already on this account.']]);
+        }
+        if (User::query()->where('mobile', $mobile)->where('id', '!=', $user->id)->exists()) {
+            throw new ApiException('This mobile number is already linked to another account.', 422, ['mobile' => ['This mobile number is already in use.']]);
+        }
+    }
+
     // ---------------------------------------------------------------- internals
 
     private function assertUnverifiedEmail(User $user): void
